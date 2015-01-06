@@ -9,8 +9,8 @@ parser.find('div[class=title]');  // this find corresponding substring
 parser.parse(userfunc(index, attrs, fstr){
   // when more than one substrings are found, userfunc will be called multiple times
   //   fstr is the full substring
-  //   attrs is the object representation of the substring
-  //   index is the index of fstr in the result of .find()
+  //   attrs is the object representation of the attributes
+  //   index is the index of fstr in the results of .find()
   ...
 });
 /* or */
