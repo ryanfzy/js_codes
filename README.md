@@ -39,3 +39,25 @@ Parser.feed(data).find('div[class=title]').parse(function(innerHTML, attrs, data
   console.log(data);       // => <div class="title" key="value"><p>some text</p><p>some text</p><div class="inner"><p>some other text</p></div></div>
 });
 ```
+
+urlloader.js
+===========
+
+## How To Use:
+
+```
+var url = 'http://some.com/web/pages';
+
+var loader = new UrlLoader();
+loader.load(url, function(responseText){
+  //onsuccess function will return response in plain text
+  alert(responseText);
+});
+
+var urls = ['http://some.com/web/page1', http://some.com/web/page2'];
+var loader = new UrlLoader();
+loader.load(urls, function(text){
+  //you can pass a array of url, and your onsuccess function will apply to each response
+  alert(text);
+});
+```
