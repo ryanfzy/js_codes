@@ -1,32 +1,46 @@
 var testhtml = `
-<html>
-    <head>
+<root>
+    <section1>
         <title>some title</title>
-    </head>
+    </section1>
+    <section2>
+        <title>section 2</title>
+    </section2>
+    <section2>
+        <title>section 2</title>
+    </section2>
     <body>
-        <div class=\"uniqueTitle\" key=\"value\">
+        <div uniqueKey=\"value\">
+            <p>unique key</p>
+        </div>
+        <div key1=\"value1\" key2=\"value2\">
+            <p>multiple unique keys</p>
+        </div>
+        <div class=\"uniqueTitle\">
             <p>some unique text</p>
         </div>
-
-        <div class=\"sharedTitle\" key1=\"value1\">
-            <p>some shared text1</p>
+        <div class=\"sharedTitle\" key=\"value\">
+            <p>some shared text</p>
         </div>
-        <div class=\"sharedTitle\" key2=\"value\">
-            <p>some shared text2</p>
-        </div>
-
-        <div class=\"nestedTitle\" key1=\"value\">
-            <div class=\"nestedTitle\" key2=\"value\">
-                <p>some nested text1</p>
+        <div>
+            <div class="nestedTitle">
+                <p>some nested text</p>
             </div>
-            <p>some nested text2</p>
+            <div>
+                <p>some nested text with no title</p>
+            </div>
         </div>
-
-        <div class=\"sharedTitle\" uniqueKey=\"uniqueValue\">
+        <div class=\"nestedTitle2\">
+            <div>
+                <p>some nested text 2</p>
+            </div>
+            <p>some nested text 2 with no title</p>
+        </div>
+        <div class=\"sharedTitle\" uniqueKey2=\"value\">
             <p>some shared and unique text</p>
         </div>
     </body>
-</html>`;
+</root>`;
 
 // this only work on the test html string
 // will not be work on real html
@@ -71,55 +85,142 @@ describe("test parser.CreateParser()", function(){
     });
 });
 
-describe("test parser.Find()", function(){
+describe("test parser.Find() - for single tag", function(){
     beforeAll(function(){
         var html = RemoveSpacesBetweenTags(testhtml);
         this.parser = parserjs.CreateParser(html);
-
-        /*
-        this.exp1_innerhtml = "<p>some text</p>";
-        this.exp1_attrs = [];
-        this.exp1_data = "<div><p>some text</p></div>";
-
-        this.exp2_innerhtml = "<p>some text1</p>";
-        this.exp1_attrs = {class : "title", key : "value"};
-        this.exp1_data = "<div class=\"title\"><p>some text1</p></div>";
-
-        this.exp3_innerhtml = ["<p>some text1</p>", "<p>some text2</p>"];
-        this.exp3_attrs = [{class : "title", key1 : "value1"}, {class : "title", key2 : "value2"}];
-        this.exp4_data = ["<div class=\"title\" key1=\"value1\"><p>some text1</p></div>",
-            "<div class=\"title\" key2=\"value2\"><p>some text2</p></div>"];
-            */
     });
 
-    it("test \"<tag>\", e.g. \"head\"", function(){
-        var selector = "head";
-        var exp = ["<head><title>some title</title></head>"];
+    it("test \"<tag>\", e.g. \"section1\"", function(){
+        var selector = "section1";
+        var exp = ["<section1><title>some title</title></section1>"];
         var p = this.parser.Find(selector);
         expect(p.data).toEqual(exp);
     });
 
-    it("test \"<tag> <tag>\", e.g. \"head title\"", function(){
+    it("test \"<tag>\" - multi, e.g. \"section2\"", function(){
+        var selector = "section2";
+        var exp = ["<section2><title>section 2</title></section2>","<section2><title>section 2</title></section2>"];
+        var p = this.parser.Find(selector);
+        expect(p.data).toEqual(exp);
     });
 
-    it("test \"<tag>[<key>]\", e.g. ", function(){
+    it("test \"<tag>[<key>]\", e.g. \"div[uniqueKey]\"", function(){
+        var selector = "div[uniqueKey]";
+        var exp = ["<div uniqueKey=\"value\"><p>unique key</p></div>"];
+        var p = this.parser.Find(selector);
+        expect(p.data).toEqual(exp);
     });
 
-    it("test \"<tag>[<key>] <tag>\", e.g. ", function(){
-    });
-    
-    it("test \"<tag>[<key> <key>]\", e.g. ", function(){
+    it("test \"<tag>[<key>]\" - multi, e.g. ", function(){
     });
 
-    it("test \"<tag>[<key>=<value>]\", e.g. ", function(){
+    it("test \"<tag>[<key1> <key2>]\", e.g. \"div[key1 key2]\"", function(){
+        var selector = "div[key1 key2]";
+        var exp = ["<div key1=\"value1\" key2=\"value2\"><p>multiple unique keys</p></div>"];
+        var p = this.parser.Find(selector);
+        expect(p.data).toEqual(exp);
     });
 
-    it("test \"<tag>[<key1>=<value1> <key2>=<value2>]\", e.g. ", function(){
+    it("test \"<tag>[<key1> <key2>]\" - multi, e.g. ", function(){
     });
 
-    it("test \"<tag> <tag>[<key>=<value>]\", e.g. ", function(){
+    it("test \"<tag>[<key2> <key1>]\", e.g. ", function(){
     });
 
-    it("test \"<tag>[<key>=<value>] <tag>\", e.g. ", function(){
+    it("test \"<tag>[<key>=<value>]\", e.g. \"div[class=uniqueTitle]\"", function(){
+        var selector = "div[class=uniqueTitle]";
+        var exp = ["<div class=\"uniqueTitle\"><p>some unique text</p></div>"];
+        var p = this.parser.Find(selector);
+        expect(p.data).toEqual(exp);
+    });
+
+    it("test \"<tag>[<key>=<value>]\" - multi, e.g. \"div[class=uniqueTitle]\"", function(){
+    });
+
+    it("test \"<tag>[<key1> <key2>=<value2>]\", e.g. ", function(){
+    });
+
+    it("test \"<tag>[<key1> <key2>=<value2>]\" - multi, e.g. ", function(){
+    });
+
+    it("test \"<tag>[<key2>=<value2> <key1>]\", e.g. ", function(){
+    });
+
+    it("test \"<tag>[<key1>=<value1> <key2>=<value2>]\", e.g. \"div[class=sharedTitle key=value]\"", function(){
+        var selector = "div[class=sharedTitle key=value]";
+        var exp = ["<div class=\"sharedTitle\" key=\"value\"><p>some shared text 1</p></div>"];
+        var p = this.parser.Find(selector);
+        expect(p.data).toEqual(exp);
+    });
+
+    it("test \"<tag>[<key1>=<value1> <key2>=<value2>]\" - multi, e.g. ", function(){
+    });
+
+    it("test \"<tag>[<key2>=<value2> <key1>=<value1>]\", e.g. ", function(){
+    });
+
+});
+
+describe("test parser.Find() - for multiple tags", function(){
+    beforeAll(function(){
+    });
+
+    it("test \"<tag> <tag>\", e.g. \"section1 title\"", function(){
+        var selector = "section1 title";
+        var exp = ["<title>some title</title>"];
+        var p = this.parser.Find(selector);
+        expect(p.data).toEqual(exp);
+    });
+
+    it("test \"<tag> <tag>\" - multi, e.g. ", function(){
+    });
+
+    it("test \"<tag>[<key>] <tag>\", e.g. \"div[uniqueKey] p\"", function(){
+        var selector = "div[uniqueKey] p";
+        var exp = ["<p>unique key</p>"];
+        var p = this.parser.Find(selector);
+        expect(p.data).toEqual(exp);
+    });
+
+    it("test \"<tag>[<key>] <tag>\" - multi, e.g. ", function(){
+    });
+
+    it("test \"<tag> <tag>[<key]\", e.g. ", function(){
+    });
+
+    it("test \"<tag>[<key>=<value>] <tag>\", e.g. \"div[class=nestedTitle2] p\"", function(){
+        var selector = "div[class=nestedTitle2] p";
+        var exp = ["<p>some nested text with no title</p>"];
+        var p = this.parser.Find(selector);
+        expect(p.data).toEqual(exp);
+    });
+
+    it("test \"<tag>[<key>=<value>] <tag>\" - multi, e.g. ", function(){
+    });
+
+    it("test \"<tag> <tag>[<key>=<value>]\", e.g. \"div div[class=nestedTitle]\"", function(){
+        var selector = "div div[class=nestedTitle]";
+        var exp = ["<div class=\"nestedTitle\"><p>some nested text</p></div>"];
+        var p = this.parser.Find(selector);
+        expect(p.data).toEqual(exp);
+    });
+});
+
+describe("test parser.Parse()", function(){
+    it("test single case", function(){
+        var parser = parserjs.CreateParser();
+        parser.data = ["<tag key1=\"value1\" key2=\"value2\"><subtag>some text</subtag></tag>"];
+        var eInnerHtml = "<subtag>some text</subtag>";
+        var eAttrs = {key1 : "value1", key2 : "value2"};
+        var eData = "<tag key1=\"value1\" key2=\"value2\"><subtag>some text</subtag></tag>";
+        parser.Parse(function(html, attrs, data){
+            expect(html).toEqual(eInnerHtml);
+            expect(attrs).toEqual(eAttrs);
+            expect(data).toEqual(eData);
+        });
+    });
+
+    it("test multiple cases", function(){
     });
 });
