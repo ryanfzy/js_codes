@@ -1,25 +1,56 @@
-var testhtml = `
-<root>
-    <section1>
-        <title>some title</title>
-    </section1>
-    <section2>
-        <title>section 2</title>
-    </section2>
-    <section2>
-        <title>section 2</title>
-    </section2>
-    <body>
-        <div uniqueKey=\"value\">
-            <p>unique key</p>
-        </div>
-        <div key1=\"value1\" key2=\"value2\">
+function extractComment(strFn){
+    var str = strFn.toString();
+    var sIndex = str.indexOf("/*") + "/*".length;
+    var eIndex = str.lastIndexOf("*/");
+    return str.substring(sIndex, eIndex);
+}
+
+var testhtml = extractComment(function(){/*
+<tag1>
+    <tag2>
+        <tag3>tag 3 text</tag3>
+    </tag2>
+    <tag4>
+        <tag5>tag 5 text</tag5>
+    </tag4>
+    <tag4>
+        <tag6>tag 6 text</tag6>
+    </tag4>
+    <tag7>
+        <tag8 key1="value1">
+            <tag9>tag 9 text</tag9>
+        </tag8>
+
+        <div key1="value1" key2="value2">
             <p>multiple unique keys</p>
         </div>
-        <div class=\"uniqueTitle\">
-            <p>some unique text</p>
+
+        <tag8 key2="value2">
+            <tag10>tag 10 text</tag10>
+        </tag8>
+        <tag8 key2="value2">
+            <tag11>tag 11 text</tag11>
+        </tag8>
+
+        <tag8 key3="value3" key4="value4">
+            <tag12>tag 12 text</tag12>
+        </tag8>
+
+        <tag8 key5="value5">
+            <tag13>tag 13 text</tag13>
+        </tag8>
+
+        <tag8 key6="value6">
+            <tag14>tag 14 text</tag14>
+        </tag8>
+        <tag8 key6="value6">
+            <tag15>tag 15 text</tag15>
+        </tag8>
+
+        <div key1="value" uniqueKey3="value">
+            <p>unique key with key 1</p>
         </div>
-        <div class=\"sharedTitle\" key=\"value\">
+        <div class="sharedTitle" key="value">
             <p>some shared text</p>
         </div>
         <div>
@@ -30,17 +61,18 @@ var testhtml = `
                 <p>some nested text with no title</p>
             </div>
         </div>
-        <div class=\"nestedTitle2\">
+        <div class="nestedTitle2">
             <div>
                 <p>some nested text 2</p>
             </div>
             <p>some nested text 2 with no title</p>
         </div>
-        <div class=\"sharedTitle\" uniqueKey2=\"value\">
+        <div class="sharedTitle" uniqueKey3="value">
             <p>some shared and unique text</p>
         </div>
     </body>
-</root>`;
+</root>
+*/});
 
 // this only work on the test html string
 // will not be work on real html
@@ -57,7 +89,7 @@ describe(`test RemoveSpacesBetweenTags() function
 - if this function is not passed, following tests are not valid`, function(){
 
     it("remove spaces between tags", function(){
-        var test = `
+        var test = extractComment(function(){/*
 <html>
     <head></head>
     <body>
@@ -65,7 +97,9 @@ describe(`test RemoveSpacesBetweenTags() function
             <p>some test</p>
         </div>
     </body>
-</html>`;
+</html>
+        */});
+        console.log(test);
 
         var exp = "<html><head></head><body><div><p>some test</p></div></body></html>";
         expect(RemoveSpacesBetweenTags(test)).toEqual(exp);
@@ -91,33 +125,38 @@ describe("test parser.Find() - for single tag", function(){
         this.parser = parserjs.CreateParser(html);
     });
 
-    it("test \"<tag>\", e.g. \"section1\"", function(){
-        var selector = "section1";
-        var exp = ["<section1><title>some title</title></section1>"];
+    it("test \"<tag>\", e.g. \"tag2\"", function(){
+        var selector = "tag2";
+        var exp = ["<tag2><tag3>tag 3 text</tag3></tag2>"];
         var p = this.parser.Find(selector);
         expect(p.data).toEqual(exp);
     });
 
-    it("test \"<tag>\" - multi, e.g. \"section2\"", function(){
-        var selector = "section2";
-        var exp = ["<section2><title>section 2</title></section2>","<section2><title>section 2</title></section2>"];
+    it("test \"<tag>\" - multi, e.g. \"tag4\"", function(){
+        var selector = "tag4";
+        var exp = ["<tag4><tag5>tag 5 text</tag5></tag4>","<tag4><tag6>tag 6 text</tag6></tag4>"];
         var p = this.parser.Find(selector);
         expect(p.data).toEqual(exp);
     });
 
-    it("test \"<tag>[<key>]\", e.g. \"div[uniqueKey]\"", function(){
-        var selector = "div[uniqueKey]";
-        var exp = ["<div uniqueKey=\"value\"><p>unique key</p></div>"];
+    it("test \"<tag>[<key>]\", e.g. \"tag8[key1]\"", function(){
+        var selector = "tag8[key1]";
+        var exp = ["<tag8 key1=\"value1\"><tag9>tag 9 text</tag9></tag8>"];
         var p = this.parser.Find(selector);
         expect(p.data).toEqual(exp);
     });
 
-    it("test \"<tag>[<key>]\" - multi, e.g. ", function(){
+    it("test \"<tag>[<key>]\" - multi, e.g. \"tag8[key2]\"", function(){
+        var selector = "tag8[key2]";
+        var exp = ["<tag8 key2=\"value2\"><tag10>tag 10 text</tag10></tag8>",
+                   "<tag8 key2=\"value2\"><tag11>tag 11 text</tag11></tag8>"];
+        var p = this.parser.Find(selector);
+        expect(p.data).toEqual(exp);
     });
 
-    it("test \"<tag>[<key1> <key2>]\", e.g. \"div[key1 key2]\"", function(){
-        var selector = "div[key1 key2]";
-        var exp = ["<div key1=\"value1\" key2=\"value2\"><p>multiple unique keys</p></div>"];
+    it("test \"<tag>[<key1> <key2>]\", e.g. \"tag8[key3 key4]\"", function(){
+        var selector = "tag8[key3 key4]";
+        var exp = ["<tag8 key3=\"value3\" key4=\"value4\"><tag12>tag 12 text</tag12></tag8>"];
         var p = this.parser.Find(selector);
         expect(p.data).toEqual(exp);
     });
@@ -125,20 +164,33 @@ describe("test parser.Find() - for single tag", function(){
     it("test \"<tag>[<key1> <key2>]\" - multi, e.g. ", function(){
     });
 
-    it("test \"<tag>[<key2> <key1>]\", e.g. ", function(){
-    });
-
-    it("test \"<tag>[<key>=<value>]\", e.g. \"div[class=uniqueTitle]\"", function(){
-        var selector = "div[class=uniqueTitle]";
-        var exp = ["<div class=\"uniqueTitle\"><p>some unique text</p></div>"];
+    it("test \"<tag>[<key2> <key1>]\", e.g. \"tag8[key4 key3]\"", function(){
+        var selector = "tag8[key4 key3]";
+        var exp = ["<tag8 key3=\"value3\" key4=\"value4\"><tag12>tag 12 text</tag12></tag8>"];
         var p = this.parser.Find(selector);
         expect(p.data).toEqual(exp);
     });
 
-    it("test \"<tag>[<key>=<value>]\" - multi, e.g. \"div[class=uniqueTitle]\"", function(){
+    it("test \"<tag>[<key>=<value>]\", e.g. \"tag8[key5=value5]\"", function(){
+        var selector = "tag8[key5=value5]";
+        var exp = ["<tag8 key5=\"value5\"><tag13>tag 13 text</tag13></tag8>"];
+        var p = this.parser.Find(selector);
+        expect(p.data).toEqual(exp);
     });
 
-    it("test \"<tag>[<key1> <key2>=<value2>]\", e.g. ", function(){
+    it("test \"<tag>[<key>=<value>]\" - multi, e.g. \"tag8[key6=value6]\"", function(){
+        var selector = "tag8[key6=value6]";
+        var exp = ["<tag8 key6=\"value6\"><tag14>tag 14 text</tag14></tag8>",
+                   "<tag8 key6=\"value6\"><tag15>tag 15 text</tag15></tag8>"];
+        var p = this.parser.Find(selector);
+        expect(p.data).toEqual(exp);
+    });
+
+    it("test \"<tag>[<key1> <key2>=<value2>]\", e.g. \"div[key1 uniqueKey3=value]\"", function(){
+        var selector = "div[key1 uniqueKey3=value]";
+        var exp = ["<div key1=value uniqueKey3=value><p>unique key with key 1</p></div>"];
+        var p = this.parser.Find(selector);
+        expect(p.data).toEqual(exp);
     });
 
     it("test \"<tag>[<key1> <key2>=<value2>]\" - multi, e.g. ", function(){
@@ -164,11 +216,13 @@ describe("test parser.Find() - for single tag", function(){
 
 describe("test parser.Find() - for multiple tags", function(){
     beforeAll(function(){
+        var html = RemoveSpacesBetweenTags(testhtml);
+        this.parser = parserjs.CreateParser(html);
     });
 
-    it("test \"<tag> <tag>\", e.g. \"section1 title\"", function(){
-        var selector = "section1 title";
-        var exp = ["<title>some title</title>"];
+    it("test \"<tag> <tag>\", e.g. \"tag2 tag3\"", function(){
+        var selector = "tag2 tag3";
+        var exp = ["<tag3>tag 3 text</tag3>"];
         var p = this.parser.Find(selector);
         expect(p.data).toEqual(exp);
     });
@@ -224,3 +278,4 @@ describe("test parser.Parse()", function(){
     it("test multiple cases", function(){
     });
 });
+
