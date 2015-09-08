@@ -14,22 +14,18 @@ var testhtml = extractComment(function(){/*
         <tag5>tag 5 text</tag5>
     </tag4>
     <tag4>
-        <tag6>tag 6 text</tag6>
+        <tag5>tag 5 text</tag5>
     </tag4>
     <tag7>
         <tag8 key1="value1">
             <tag9>tag 9 text</tag9>
         </tag8>
 
-        <div key1="value1" key2="value2">
-            <p>multiple unique keys</p>
-        </div>
-
         <tag8 key2="value2">
-            <tag10>tag 10 text</tag10>
+            <tag10>tag 10 text 1</tag10>
         </tag8>
         <tag8 key2="value2">
-            <tag11>tag 11 text</tag11>
+            <tag10>tag 10 text 2</tag10>
         </tag8>
 
         <tag8 key3="value3" key4="value4">
@@ -47,9 +43,10 @@ var testhtml = extractComment(function(){/*
             <tag15>tag 15 text</tag15>
         </tag8>
 
-        <div key1="value" uniqueKey3="value">
-            <p>unique key with key 1</p>
-        </div>
+        <tag8>
+            <tag16 key7="value7">tag 16 text</tag16>
+        </tag>
+
         <div class="sharedTitle" key="value">
             <p>some shared text</p>
         </div>
@@ -134,7 +131,7 @@ describe("test parser.Find() - for single tag", function(){
 
     it("test \"<tag>\" - multi, e.g. \"tag4\"", function(){
         var selector = "tag4";
-        var exp = ["<tag4><tag5>tag 5 text</tag5></tag4>","<tag4><tag6>tag 6 text</tag6></tag4>"];
+        var exp = ["<tag4><tag5>tag 5 text</tag5></tag4>","<tag4><tag5>tag 5 text</tag5></tag4>"];
         var p = this.parser.Find(selector);
         expect(p.data).toEqual(exp);
     });
@@ -148,8 +145,8 @@ describe("test parser.Find() - for single tag", function(){
 
     it("test \"<tag>[<key>]\" - multi, e.g. \"tag8[key2]\"", function(){
         var selector = "tag8[key2]";
-        var exp = ["<tag8 key2=\"value2\"><tag10>tag 10 text</tag10></tag8>",
-                   "<tag8 key2=\"value2\"><tag11>tag 11 text</tag11></tag8>"];
+        var exp = ["<tag8 key2=\"value2\"><tag10>tag 10 text 1</tag10></tag8>",
+                   "<tag8 key2=\"value2\"><tag10>tag 10 text 2</tag10></tag8>"];
         var p = this.parser.Find(selector);
         expect(p.data).toEqual(exp);
     });
@@ -227,30 +224,48 @@ describe("test parser.Find() - for multiple tags", function(){
         expect(p.data).toEqual(exp);
     });
 
-    it("test \"<tag> <tag>\" - multi, e.g. ", function(){
-    });
-
-    it("test \"<tag>[<key>] <tag>\", e.g. \"div[uniqueKey] p\"", function(){
-        var selector = "div[uniqueKey] p";
-        var exp = ["<p>unique key</p>"];
+    it("test \"<tag> <tag>\" - multi, e.g. \"tag4 tag5\"", function(){
+        var selector = "tag4 tag5";
+        var exp = ["<tag5>tag 5 text</tag5>", "<tag5>tag 5 text</tag5>"];
         var p = this.parser.Find(selector);
         expect(p.data).toEqual(exp);
     });
 
-    it("test \"<tag>[<key>] <tag>\" - multi, e.g. ", function(){
-    });
-
-    it("test \"<tag> <tag>[<key]\", e.g. ", function(){
-    });
-
-    it("test \"<tag>[<key>=<value>] <tag>\", e.g. \"div[class=nestedTitle2] p\"", function(){
-        var selector = "div[class=nestedTitle2] p";
-        var exp = ["<p>some nested text with no title</p>"];
+    it("test \"<tag>[<key>] <tag>\", e.g. \"tag8[key1] tag9\"", function(){
+        var selector = "tag8[key1] tag9";
+        var exp = ["<tag9>tag 9 text</tag9>"];
         var p = this.parser.Find(selector);
         expect(p.data).toEqual(exp);
     });
 
-    it("test \"<tag>[<key>=<value>] <tag>\" - multi, e.g. ", function(){
+    it("test \"<tag>[<key>] <tag>\" - multi, e.g. \"tag8[key2] tag10\"", function(){
+        var selector = "tag8[key2] tag10";
+        var exp = ["<tag10>tag 10 text 1</tag10>", "<tag10>tag 10 text 2</tag10>"];
+        var p = this.parser.Find(selector);
+        expect(p.data).toEqual(exp);
+    });
+
+    it("test \"<tag> <tag>[<key]\", e.g. \"tag8 tag16[key7]\"", function(){
+        var selector = "tag8 tag16[key7]";
+        var exp = ["<tag16 key7=\"value7\">tag 16 text</tag16>"];
+        /* following line makes the page hang
+        var p = this.parser.Find(selector);
+        expect(p.data).toEqual(exp);
+        */
+    });
+
+    it("test \"<tag>[<key>=<value>] <tag>\", e.g. \"tag8[key1=value1] tag9\"", function(){
+        var selector = "tag8[key1=value1] tag9";
+        var exp = ["<tag9>tag 9 text</tag9>"];
+        var p = this.parser.Find(selector);
+        expect(p.data).toEqual(exp);
+    });
+
+    it("test \"<tag>[<key>=<value>] <tag>\" - multi, e.g. \"tag8[key2=value2] tag10\"", function(){
+        var selector = "tag8[key2=value2] tag10";
+        var exp = ["<tag10>tag 10 text 1</tag10>", "<tag10>tag 10 text 2</tag10>"];
+        var p = this.parser.Find(selector);
+        expect(p.data).toEqual(exp);
     });
 
     it("test \"<tag> <tag>[<key>=<value>]\", e.g. \"div div[class=nestedTitle]\"", function(){
