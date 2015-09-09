@@ -163,6 +163,8 @@ var parserjs = (function(){
 	
 		// convert attrs into object
 		_get_attrs: function(data){
+            // remove '<' and '>' first
+            data = data.substring(1, data.length-1);
 			var kvs = data.split(/\s+/);
 			var attrs = {};
 			for(var i = 0; i < kvs.length; i++){
@@ -209,8 +211,10 @@ var parserjs = (function(){
 
     return {
         CreateParser : function(data){
+            data = data || "";
             return new Parser(data);
         }
     }
 
 })();
+
