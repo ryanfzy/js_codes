@@ -84,13 +84,38 @@ var parserjs = (function(){
 	
 			return rstr;
 		},
+
+        // parse the selectors
+        _parse_selector: function(pstr){
+            var results = [];
+            var result = '';
+            var includeKeys = false;
+            for (var i = 0; i < pstr.length; i++){
+                var ch = pstr.charAt(i);
+                if (ch == ' ' && !includeKeys){
+                    if (result.length > 0){
+                        results.push(result);
+                        result = '';
+                        continue;
+                    }
+                }
+                else if (ch == '[' || (ch == ']' && includeKeys)){
+                    includeKeys = !includeKeys;
+                }
+                result += ch;
+            }
+            if (result.length > 0){
+                results.push(result);
+            }
+            return results;
+        },
 	
 		// find substring based on css selectors
 		Find: function(pstr, onerror){
 	
 			// a single space is used to seperate selectors
 			// they are in parent-child relationship
-			var tags = pstr.split(' ');
+			var tags = this._parse_selector(pstr);
 	
 			var _parser;
 			var res = this.data;
