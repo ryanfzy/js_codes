@@ -1,5 +1,67 @@
 var parserjs = (function(){
 
+    var SelectorParser = function(str){
+        this.data = str;
+        this.curPos = 0;
+        this.includeKeys = false;
+    };
+
+    SelectorParser.Tag = 'Tag';
+    SelectorParser.Attribute = 'Attribute';
+    SelectorParser.Value = 'Value';
+
+    SelectorParser.prototype = {
+        GetNextToken: function(){
+            var token = '';
+            var type = '';
+            var foundToken = false;
+            var foundAttribute = false;
+            while(!foundToken || this.curPos == this.data.length-1){
+                var ch = this.data[this.curPos];
+                if (ch == '['){
+                    this.includeKeys = true;
+                    type = SelectorParser.Tag;
+                    foundToken = token.length > 0;
+                }
+                else if (ch == ']'){
+                    this.includeKeys = false;
+                    if (foundAttribute){
+                        type = SelectorParser.Value;
+                    }
+                    else{
+                        type = SelectorParser.Attribute;
+                    }
+                    foundToken = token.length > 0;
+                }
+                else if (ch == '=' && this.includeKeys){
+                    type =SelectorParser.Attribute;
+                    foundAttribute = true;
+                    foundToken = token.length > 0;
+                }
+                else if (ch == ' '){
+                    if (this.includeKeys){
+                        if (foundAttribute){
+                            type = SelectorParser.Value;
+                        }
+                        else{
+                            type = SelectorParser.Attribute;
+                        }
+                        foundToken = token.length > 0;
+                    }
+                    else{
+                        type = SelectorParser.Tag;
+                        foundToken = token.length > 0;
+                     }
+                }
+                else{
+                    tag += ch;
+                }
+                this.curPos++;
+            }
+            return [type, token];
+        }
+    };
+
 	// data can be a single string
 	//   or an array of strings
 	var Parser = function(data){
@@ -23,10 +85,11 @@ var parserjs = (function(){
 	Parser.prototype = {
 		// convert the css selector to regex
 		_convert: function(pstr){
+            /*
 			var rstrs = pstr.split('[');
 	
 			var tag = rstrs[0];
-			this.tag = tag;
+			this.tag = tag;*/
 	
 			// if no attributes found
 			if(rstrs.length == 1){
@@ -85,6 +148,7 @@ var parserjs = (function(){
 			return rstr;
 		},
 
+        //  TODO: parse string to js object
         // parse the selectors
         _parse_selector: function(pstr){
             var results = [];
@@ -113,8 +177,6 @@ var parserjs = (function(){
 		// find substring based on css selectors
 		Find: function(pstr, onerror){
 	
-			// a single space is used to seperate selectors
-			// they are in parent-child relationship
 			var tags = this._parse_selector(pstr);
 	
 			var _parser;
@@ -124,7 +186,12 @@ var parserjs = (function(){
 	
 				for(var j = 0; j < res.length; j++){
 					// find the child subtrings for each parent substring
-					tmp = tmp.concat(this._find(res[j], tags[i]));
+                    var dataitem = res[j];
+                    var tagsWithSingleKey = this._parse_single_selector(tags[i]);
+                    for (var k = 0; tagsWithSingleKey.length(); k++){
+                        dataitem = this._find(dataitem, tagsWithSingleKey[k]);
+                    }
+					tmp = tmp.concat(dataitem);
 				}
 				res = tmp;
 			}
@@ -135,6 +202,26 @@ var parserjs = (function(){
 			_parser.tag = this.tag;
 			return _parser;
 		},
+
+        // parse the selector to {tag, key} object
+        _parse_single_selector: function(selector){
+            var selectors = [];
+			var rstrs = pstr.split('[');
+
+			var tag = rstrs[0];
+            if (rstrs.length == 1){
+                selectors.push({tag: tag});
+            }
+            else{
+			    var attrs = rstrs[1].substring(0, rstrs[1].length-1);
+                var attrsArray = attrs.split();
+                for (var i = 0; i < attrsArray.length; i++){
+                    selectors.push({tag: tag, key: attrsArray[i]});
+                }
+            }
+
+            return selectors;
+        },
 	
 		// handle single case for find()
 		_find: function(data, pstr, onerror){
