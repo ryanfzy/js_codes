@@ -1,63 +1,79 @@
 var parserjs = (function(){
 
-    var SelectorParser = function(str){
+    // lexer class which analyse the selector
+    // and return the token and its type
+    var SelectorLexer = function(str){
         this.data = str;
         this.curPos = 0;
         this.includeKeys = false;
+        this.foundAttribute = false;
     };
 
-    SelectorParser.Tag = 'Tag';
-    SelectorParser.Attribute = 'Attribute';
-    SelectorParser.Value = 'Value';
+    // types of tokens
+    // add more types here if need more powerfull selector
+    SelectorLexer.Tag = 'Tag';
+    SelectorLexer.Attribute = 'Attribute';
+    SelectorLexer.Value = 'Value';
+    SelectorLexer.NoType = 'NoType';
 
-    SelectorParser.prototype = {
+    SelectorLexer.prototype = {
+        // check if there is more tokens
+        HasNextToken: function(){
+            return this.curPos < this.data.length;
+        },
+
+        // get the next token as [type, token]
         GetNextToken: function(){
             var token = '';
             var type = '';
             var foundToken = false;
-            var foundAttribute = false;
-            while(!foundToken || this.curPos == this.data.length-1){
-                var ch = this.data[this.curPos];
+            while(!foundToken && this.curPos < this.data.length){
+                var ch = this.data.charAt(this.curPos);
                 if (ch == '['){
                     this.includeKeys = true;
-                    type = SelectorParser.Tag;
+                    type = SelectorLexer.Tag;
                     foundToken = token.length > 0;
                 }
                 else if (ch == ']'){
                     this.includeKeys = false;
-                    if (foundAttribute){
-                        type = SelectorParser.Value;
+                    if (this.foundAttribute){
+                        type = SelectorLexer.Value;
+                        this.foundAttribute = false;
                     }
                     else{
-                        type = SelectorParser.Attribute;
+                        type = SelectorLexer.Attribute;
                     }
                     foundToken = token.length > 0;
                 }
                 else if (ch == '=' && this.includeKeys){
-                    type =SelectorParser.Attribute;
-                    foundAttribute = true;
+                    type = SelectorLexer.Attribute;
+                    this.foundAttribute = true;
                     foundToken = token.length > 0;
                 }
-                else if (ch == ' '){
+                else if (ch == ' ' || this.curPos == this.data.length-1){
                     if (this.includeKeys){
-                        if (foundAttribute){
-                            type = SelectorParser.Value;
+                        if (this.foundAttribute){
+                            type = SelectorLexer.Value;
+                            this.foundAttribute = false;
                         }
                         else{
-                            type = SelectorParser.Attribute;
+                            type = SelectorLexer.Attribute;
                         }
-                        foundToken = token.length > 0;
                     }
                     else{
-                        type = SelectorParser.Tag;
-                        foundToken = token.length > 0;
-                     }
+                        type = SelectorLexer.Tag;
+                    }
+                    foundToken = token.length > 0;
                 }
                 else{
-                    tag += ch;
+                    token += ch;
                 }
                 this.curPos++;
             }
+
+            if (type.length == 0)
+                type = SelectorLexer.NoType;
+            
             return [type, token];
         }
     };
@@ -148,36 +164,55 @@ var parserjs = (function(){
 			return rstr;
 		},
 
-        //  TODO: parse string to js object
-        // parse the selectors
+        // parse the selector to array of objects
+        // returns [obj1, obj2, ...], obj_n+1 is the child of obj_ n
+        // {obj_n : {k1 : v1, k2 : v2, ...}}, position of keys doesn't matter
+        // obj_n could be null, v_n could be null
         _parse_selector: function(pstr){
-            var results = [];
-            var result = '';
-            var includeKeys = false;
-            for (var i = 0; i < pstr.length; i++){
-                var ch = pstr.charAt(i);
-                if (ch == ' ' && !includeKeys){
-                    if (result.length > 0){
-                        results.push(result);
-                        result = '';
-                        continue;
-                    }
+            var parser = new SelectorLexer(pstr);
+            var tags = [];
+            var tag = {};
+            var curTag = '';
+            var curKey = '';
+            while (parser.HasNextToken()){
+                var typeToken = parser.GetNextToken();
+                var type = typeToken[0];
+                var token = typeToken[1];
+                switch (type){
+                    case SelectorLexer.Tag:
+                        if (Object.keys(tag).length > 0)
+                            tags.push(tag);
+                        curTag = token;
+                        tag = {};
+                        tag[curTag] = null;
+                        break;
+
+                    case SelectorLexer.Attribute:
+                        curKey = token;
+                        if (!tag[curTag]){
+                            tag[curTag] = {};
+                        }
+                        tag[curTag][curKey] = null;
+                        break;
+
+                    case SelectorLexer.Value:
+                        tag[curTag][curKey] = token;
+                        break;
+
+                    default:
+                        break;
                 }
-                else if (ch == '[' || (ch == ']' && includeKeys)){
-                    includeKeys = !includeKeys;
-                }
-                result += ch;
             }
-            if (result.length > 0){
-                results.push(result);
-            }
-            return results;
+            tags.push(tag);
+            return tags;
         },
 	
 		// find substring based on css selectors
 		Find: function(pstr, onerror){
 	
 			var tags = this._parse_selector(pstr);
+            console.log(tags);
+            return;
 	
 			var _parser;
 			var res = this.data;
