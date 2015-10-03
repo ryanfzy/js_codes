@@ -48,7 +48,7 @@ var testhtml = extractComment(function(){/*
         </tag>
 
         <div class="sharedTitle" key="value">
-            <p>some shared text</p>
+            <p>some shared text 1</p>
         </div>
         <div>
             <div class="nestedTitle">
@@ -64,8 +64,8 @@ var testhtml = extractComment(function(){/*
             </div>
             <p>some nested text 2 with no title</p>
         </div>
-        <div class="sharedTitle" uniqueKey3="value">
-            <p>some shared and unique text</p>
+        <div key1="value" uniqueKey3="value">
+            <p>unique key with key 1</p>
         </div>
     </body>
 </root>
@@ -185,7 +185,7 @@ describe("test parser.Find() - for single tag", function(){
 
     it("test \"<tag>[<key1> <key2>=<value2>]\", e.g. \"div[key1 uniqueKey3=value]\"", function(){
         var selector = "div[key1 uniqueKey3=value]";
-        var exp = ["<div key1=value uniqueKey3=value><p>unique key with key 1</p></div>"];
+        var exp = ["<div key1=\"value\" uniqueKey3=\"value\"><p>unique key with key 1</p></div>"];
         var p = this.parser.Find(selector);
         expect(p.data).toEqual(exp);
     });

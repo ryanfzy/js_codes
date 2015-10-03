@@ -51,6 +51,12 @@ var parserjs = (function(){
                     foundToken = token.length > 0;
                 }
                 else if (ch == ' ' || this.curPos == this.data.length-1){
+
+                    // when reach last ch, have to add it to token first
+                    if (this.curPos == this.data.length-1){
+                        token += ch;
+                    }
+
                     if (this.includeKeys){
                         if (this.foundAttribute){
                             type = SelectorLexer.Value;
@@ -79,7 +85,7 @@ var parserjs = (function(){
     };
 
 	// data can be a single string
-	//   or an array of strings
+    // but always convert it to array of strings
 	var Parser = function(data){
 		this.tag = '';
 		if(data instanceof Array){
@@ -99,36 +105,43 @@ var parserjs = (function(){
 	};
 	
 	Parser.prototype = {
-		// convert the css selector to regex
-		_convert: function(pstr){
-            /*
-			var rstrs = pstr.split('[');
-	
-			var tag = rstrs[0];
-			this.tag = tag;*/
+        // convert selector to regex
+		_convert: function(tag){
+            var tagName = Object.keys(tag)[0];
+            var keyValue = tag[tagName];
+			this.tag = tagName;
 	
 			// if no attributes found
-			if(rstrs.length == 1){
-				var rstr = '<' + tag + '[^>]*>(.|\\s)*?<\/' + tag + '>';
+            if (!keyValue){
+				var rstr = '<' + this.tag + '[^>]*>(.|\\s)*?<\/' + this.tag + '>';
 				return rstr;
 			}
 	
-			var attrs = rstrs[1].substring(0, rstrs[1].length-1);
-			// convert attributes to regex
-			var kvstr = this._convert_kv(attrs);
+            // convert the attributes part
+            var key = Object.keys(keyValue)[0];
+            var value = keyValue[key];
+            var kvstr = '';
+            if (value){
+                kvstr = key + '="' + value + '"';
+            }
+            else{
+                kvstr = key + '=';
+            }
 	
 			var rstr = 
-				'<' + tag + '\\s+'		//start of start tag
-				+ '[^>]*'				//0 or more attributes
-				+ kvstr					//required attributes
-				+ '[^>]*'				//0 or more attributes
-				+ '>'					//end of start tag
-				+ '(.|\\s)*?'			//tag body
-				+ '<\/' + tag + '>';	//end tag
+				'<' + this.tag + '\\s+'		//start of start tag
+				+ '[^>]*'			    	//0 or more attributes
+				+ kvstr				    	//required attributes
+				+ '[^>]*'			    	//0 or more attributes
+				+ '>'				    	//end of start tag
+				+ '(.|\\s)*?'		    	//tag body
+				+ '<\/' + this.tag + '>';	//end tag
 			return rstr;
 	
 		},
 	
+        // NOTE: this is not used any more but keep this
+        //  if later we introduce position sensitive attributes
 		// convert the attributes to regex
 		_convert_kv: function(kvstr){
 			var kvs = kvstr.split(' ');
@@ -211,20 +224,31 @@ var parserjs = (function(){
 		Find: function(pstr, onerror){
 	
 			var tags = this._parse_selector(pstr);
-            console.log(tags);
-            return;
 	
 			var _parser;
 			var res = this.data;
+
 			for(var i = 0; i < tags.length; i++){
 				var tmp = [];
 	
 				for(var j = 0; j < res.length; j++){
+
 					// find the child subtrings for each parent substring
-                    var dataitem = res[j];
-                    var tagsWithSingleKey = this._parse_single_selector(tags[i]);
-                    for (var k = 0; tagsWithSingleKey.length(); k++){
-                        dataitem = this._find(dataitem, tagsWithSingleKey[k]);
+                    var dataitem = [res[j]];
+                    var tagsWithSingleKey = this._split_tag_for_each_key(tags[i]);
+
+                    // if tag has more than one attributes
+                    // need to process the data item several times 
+                    // until we find an item contining all the attributes
+                    for (var k = 0; k < tagsWithSingleKey.length; k++){
+                        var matches = [];
+                        for (var m = 0; m < dataitem.length; m++){
+                            var matchitems = this._find(dataitem[m], tagsWithSingleKey[k]);
+                            if (matchitems != -1){
+                                matches = matches.concat(matchitems);
+                            }
+                        }
+                        dataitem = matches;
                     }
 					tmp = tmp.concat(dataitem);
 				}
@@ -238,36 +262,37 @@ var parserjs = (function(){
 			return _parser;
 		},
 
-        // parse the selector to {tag, key} object
-        _parse_single_selector: function(selector){
-            var selectors = [];
-			var rstrs = pstr.split('[');
+        // if tag has more than one keys, convert it to an array of tags
+        // which each has the same tag name but only one key
+        // e.g. {tag: {key1: value1, key2: value2, ...} to
+        //      [ {tag: {key1: value1}}, {tag: {key2: value2}}, ...]
+        _split_tag_for_each_key: function(tag){
+            var tagName = Object.keys(tag)[0];
+            var keyValues = tag[tagName];
+            
+            if (!keyValues)
+                return [tag];
 
-			var tag = rstrs[0];
-            if (rstrs.length == 1){
-                selectors.push({tag: tag});
+            var tags = [];
+            for (var key in keyValues){
+                var newTag = {};
+                newTag[tagName] = {};
+                newTag[tagName][key] = keyValues[key];
+                tags.push(newTag);
             }
-            else{
-			    var attrs = rstrs[1].substring(0, rstrs[1].length-1);
-                var attrsArray = attrs.split();
-                for (var i = 0; i < attrsArray.length; i++){
-                    selectors.push({tag: tag, key: attrsArray[i]});
-                }
-            }
-
-            return selectors;
+            return tags;
         },
-	
+
 		// handle single case for find()
-		_find: function(data, pstr, onerror){
+		_find: function(data, tag, onerror){
 	
 			// convert the selector to regex
-			var rstr = this._convert(pstr);
+			var rstr = this._convert(tag);
 	
 			var reg = new RegExp(rstr, 'gi');
 			var matches = data.match(reg);
 			if(!matches){
-				return '';
+				return -1;
 			}
 	
 			var mat = matches[0];
