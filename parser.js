@@ -1,5 +1,10 @@
 var parserjs = (function(){
 
+    var closedTag = ['input'];
+    var IsClosedTag = function(tag){
+        return closedTag.indexOf(tag) == -1 ? false : true;
+    };
+
     // lexer class which analyse the selector
     // and return the token and its type
     var SelectorLexer = function(str){
@@ -132,10 +137,18 @@ var parserjs = (function(){
 				'<' + this.tag + '\\s+'		//start of start tag
 				+ '[^>]*'			    	//0 or more attributes
 				+ kvstr				    	//required attributes
-				+ '[^>]*'			    	//0 or more attributes
-				+ '>'				    	//end of start tag
+				+ '[^>]*';			    	//0 or more attributes
+
+            if (IsClosedTag(this.tag)){
+                rstr += '\/>';              //close tag
+            }
+            else{
+				rstr = rstr
+                + '>'				    	//end of start tag
 				+ '(.|\\s)*?'		    	//tag body
 				+ '<\/' + this.tag + '>';	//end tag
+            }
+
 			return rstr;
 	
 		},
@@ -294,6 +307,10 @@ var parserjs = (function(){
 			if(!matches){
 				return -1;
 			}
+
+            if (IsClosedTag(this.tag)){
+                return matches;
+            }
 	
 			var mat = matches[0];
 			var stag = '<' + this.tag + '\\b';
