@@ -307,11 +307,11 @@ var parserjs = (function(){
 			if(!matches){
 				return -1;
 			}
-
+	
             if (IsClosedTag(this.tag)){
                 return matches;
             }
-	
+
 			var mat = matches[0];
 			var stag = '<' + this.tag + '\\b';
 			var etag = '<\/' + this.tag + '>';
@@ -356,13 +356,34 @@ var parserjs = (function(){
             data = data.substring(1, data.length-1);
 			var kvs = data.split(/\s+/);
 			var attrs = {};
+            var found_kv = false;
+            var value = '';
 			for(var i = 0; i < kvs.length; i++){
 				var kv = kvs[i];
-				if(kv.search('=') == -1){
+				if(kv.search('=') == -1 && !found_kv){
 					continue;
 				}
-				kv = this._get_key_value(kvs[i]);
-				attrs[kv[0]] = kv[1];
+
+                found_kv = true;
+                if (kv[kv.length-1] == '"'){
+                    if (value.length > 0){
+                        value = value + ' ';
+                    }
+                    value = value + kv;
+                    found_kv = false
+                }
+                
+                if (found_kv){
+                    if (value.length > 0){
+                        value = value + ' ';
+                    }
+                    value = value + kv;
+                }
+                else{
+				    kv = this._get_key_value(value);
+				    attrs[kv[0]] = kv[1];
+                    value = '';
+                }
 			}
 			return attrs;
 		},
