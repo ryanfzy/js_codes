@@ -357,6 +357,7 @@ var parserjs = (function(){
 			var kvs = data.split(/\s+/);
 			var attrs = {};
             var found_kv = false;
+            var found_last = false;
             var value = '';
 			for(var i = 0; i < kvs.length; i++){
 				var kv = kvs[i];
@@ -364,22 +365,27 @@ var parserjs = (function(){
 					continue;
 				}
 
-                found_kv = true;
                 if (kv[kv.length-1] == '"'){
-                    if (value.length > 0){
-                        value = value + ' ';
-                    }
-                    value = value + kv;
-                    found_kv = false
-                }
-                
-                if (found_kv){
-                    if (value.length > 0){
-                        value = value + ' ';
-                    }
-                    value = value + kv;
+                    found_last = true;
+                    found_kv = false;
                 }
                 else{
+                    found_last = false;
+                    found_kv = true;
+                }
+                
+                if (found_kv || found_last){
+                    if (value.length > 0){
+                        value = value + ' ';
+                    }
+                    value = value + kv;
+                    if (found_last){
+                        found_kv = false;
+                        found_last = false;
+                    }
+                }
+
+                if (!found_kv && !found_last){
 				    kv = this._get_key_value(value);
 				    attrs[kv[0]] = kv[1];
                     value = '';
