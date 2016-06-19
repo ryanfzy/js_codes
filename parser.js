@@ -365,7 +365,7 @@ var parserjs = (function(){
 					continue;
 				}
 
-                if (kv[kv.length-1] == '"'){
+                if (kv[kv.length-1] == '"' || kv[kv.length-1] == "'"){
                     found_last = true;
                     found_kv = false;
                 }
