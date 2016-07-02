@@ -12,8 +12,8 @@ TokenType.Var = 8;
 TokenType.VarList = 9;
 
 var Token = function(){
-    this.type = TokenType.NoType;
-    this.value = '';
+    this.Type = TokenType.NoType;
+    this.Value = '';
 };
 
 var Parser = function(){
@@ -26,36 +26,39 @@ var Tokens = function(){
     this.curIndex = 0;
 };
 
-Tokens.Add = function(token){
-    if (this.tokens.length > 1){
+Tokens.prototype = {
+
+    Add : function(token){
+        if (this.tokens.length > 1){
+            this.curIndex++;
+        }
+        this.tokens.push(token);
+    },
+
+    Get : function(){
+        return this.tokens[this.curIndex];
+    },
+
+    MovePrev : function(){
+        this.curIndex--;
+        return this.tokens[this.curIdnex];
+    },
+
+    MoveNext : function(){
         this.curIndex++;
-    }
-    this.tokens.push(token);
-};
+    },
 
-Tokens.Get = function(){
-    return this.tokens[this.curIndex];
-};
+    HasNext : function(){
+        return this.curIndex+1 > this.tokens-1;
+    },
 
-Tokens.MovePrev = function(){
-    this.curIndex--;
-    return this.tokens[this.curIdnex];
-};
+    MoveTo : function(index){
+        this.curIndex = index;
+    },
 
-Tokens.MoveNext = function(){
-    this.curIndex++;
-};
-
-Tokens.HasNext = function(){
-    return this.curIndex+1 > this.tokens-1;
-};
-
-Tokens.MoveTo = function(index){
-    this.curIndex = index;
-};
-
-Tokens.GetIndex = function(){
-    return this.curIndex;
+    GetIndex : function(){
+        return this.curIndex;
+    },
 };
 
 var ParseQueryContext = function(){
@@ -231,74 +234,81 @@ Parser.Interpret = function(tokens){
     RunNextStatement(parseQueryContext);
 };
 
-var GetTokenType = function(word){
-    if (word[0] == '"' || word[0] == "'"){
-        token.type = TokenType.str;
+// this handles some speical tokens for ToQueryToken()
+var ToQueryToken2 = function(token){
+    var queryToken = new Token();
+    queryToken.Value = token;
+
+    if (token[0] == '"' || token[0] == "'"){
+        queryToken.Type = TokenType.Str;
+        queryToken.Value = token.substring(1, token.length-1);
+    }
+    else if (token[0] == '[' && token[token.length-1] == ']'){
+        token = token.substring(1, token.length-1);
+        queryToken.Type = TokenType.VarList;
+        queryToken.Value = token.split(/,\s+/);
     }
     else{
-        token.type = TokenType.variable;
+        queryToken.Type = TokenType.Var;
     }
+
+    return queryToken;
 }
 
-var ToToken = function(word){
-    var token = new Token();
-    token.value = word;
+// given a token
+// return a query token
+var ToQueryToken = function(token){
+    var queryToken = new Token();
+    queryToken.Value = token;
 
-    switch (word){
+    switch (token){
         case 'from':
-            token.type = TokenType.From;
+            queryToken.Type = TokenType.From;
             break;
         
         case 'select':
-            token.type = TokenType.Select;
+            queryToken.Type = TokenType.Select;
             break;
         
         case 'as':
-            token.type = TokenType.As;
+            queryToken.Type = TokenType.As;
             break;
 
         case 'where-each':
-            token.type = TokenType.WhereEach;
+            queryToken.Type = TokenType.WhereEach;
             break;
 
         case 'add-field':
-            token.type = TokenType.AddField;
+            queryToken.Type = TokenType.AddField;
             break;
 
         case 'for-key':
-            token.type = TokenType.ForKey;
+            queryToken.Type = TokenType.ForKey;
             break;
 
         case 'and':
-            token.type = TokenType.And;
+            queryToken.Type = TokenType.And;
             break;
 
         default:
-            token.type = GetTokenType(word);
+            queryToken = ToQueryToken2(token);
             break;
     };
 
-    return token;
+    return queryToken;
 };
 
-var StrIter = function(str){
-    this.str = str;
-    this.curPos = 0;
-};
-
-StrIter.prototype = {
-    CurChar : function(){
-        var pos = this.curPos < 0 ? 0 : this.curPos > this.str.length - 1 ? this.str.length - 1 : this.curPos;
-        return this.str[pos];
-    },
-
-    Next : function(){
-        if (this.curPos >= this.str.length - 1){
-            return false;
-        }
-        this.curPos++;
-        return true;
+// given a list of tokens
+// return a QueryTokens object
+var GetQueryTokens = function(tokens){
+    var queryTokens = new Tokens();
+    
+    for (var i = 0; i < tokens.length; i++){
+        var queryToken = ToQueryToken(tokens[i]);
+        queryTokens.Add(queryToken);
     }
+
+    return queryTokens;
 };
 
 // given a query string
@@ -344,6 +354,15 @@ var GetListOfTokens = function(input){
 var QueryParser = function(input){
     var tokens = GetListOfTokens(input);
     console.log(tokens);
+    var queryTokens = GetQueryTokens(tokens);
+    console.log(queryTokens);
+
+    while (queryTokens.HasNext()){
+        var token = queryTokens.Get();
+        console.log(token.TokenType);
+        console.log(token.Value);
+        queryTokens.MoveNext();
+    }
     //var parser = new Parser();
     //parser.Interpret(tokens);
 };
