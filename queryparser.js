@@ -281,18 +281,64 @@ var ToToken = function(word){
     return token;
 };
 
-var GetListOfTokens = function(input){
-    // split the input by spaces
-    console.log(input);
-    var words = input.split(/\s+/);
-    return words;
+var StrIter = function(str){
+    this.str = str;
+    this.curPos = 0;
+};
 
-    /*
-    var tokens = new Tokens();
-    for (var i = 0; i < words.length; i++){
-        var token = ToToken(word);
-        tokens.Add(token);
-    }*/
+StrIter.prototype = {
+    CurChar : function(){
+        var pos = this.curPos < 0 ? 0 : this.curPos > this.str.length - 1 ? this.str.length - 1 : this.curPos;
+        return this.str[pos];
+    },
+
+    Next : function(){
+        if (this.curPos >= this.str.length - 1){
+            return false;
+        }
+        this.curPos++;
+        return true;
+    }
+};
+
+// given a query string
+// returns a list of tokens
+// TODO: this only handles the simplest case, it might not handle
+//  more complex cases properly
+var GetListOfTokens = function(input){
+    var tokens = [];
+    var foundStr = false;
+    var foundList = false;
+
+    var token = '';
+    for (var i = 0; i < input.length; i++){
+        var ch = input[i];
+
+        if (ch == ' ' || ch == '\n'){
+            if (!foundStr && !foundList){
+                if (token.length > 0){
+                    tokens.push(token);
+                    token = '';
+                }
+                continue;
+            }
+        }
+        // a token can start and end with " or '
+        else if (ch == "'" || ch == '"'){
+            foundStr = foundStr ? false : true;
+        }
+        // a token can start with [ and end with ]
+        else if (ch == '[' || ch == ']'){
+            foundList = foundList ? false : true;
+        }
+        token = token + ch;
+    }
+
+    if (token.length > 0){
+        tokens.push(token);
+    }
+
+    return tokens;
 };
 
 var QueryParser = function(input){
@@ -306,7 +352,7 @@ var input = "from 'https://careers.mercyascot.co.nz/home'\n" +
             "select 'div[class=job]' as rets\n" +
             "where-each as ret\n" +
             "from ret.html\n" +
-            "select 'div[class=title]' a' as href\n" +
+            "select 'div[class=title] a' as href\n" +
             "add-field href.href for-key 'href'\n" +
             "and\n" +
             "select 'div[class=title] a span' as title\n" +
