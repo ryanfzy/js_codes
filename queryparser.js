@@ -29,9 +29,6 @@ var Tokens = function(){
 Tokens.prototype = {
 
     Add : function(token){
-        if (this.tokens.length > 1){
-            this.curIndex++;
-        }
         this.tokens.push(token);
     },
 
@@ -49,7 +46,7 @@ Tokens.prototype = {
     },
 
     HasNext : function(){
-        return this.curIndex+1 > this.tokens-1;
+        return this.curIndex+1 < this.tokens.length;
     },
 
     MoveTo : function(index){
@@ -357,12 +354,14 @@ var QueryParser = function(input){
     var queryTokens = GetQueryTokens(tokens);
     console.log(queryTokens);
 
+    console.log('start');
     while (queryTokens.HasNext()){
         var token = queryTokens.Get();
-        console.log(token.TokenType);
+        console.log(token.Type);
         console.log(token.Value);
         queryTokens.MoveNext();
     }
+    console.log('end');
     //var parser = new Parser();
     //parser.Interpret(tokens);
 };
