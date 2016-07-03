@@ -11,6 +11,11 @@ TokenType.Str = 7;
 TokenType.Var = 8;
 TokenType.VarList = 9;
 
+var ValObj = function(){
+    this.Name;
+    this.Value;
+};
+
 var Token = function(){
     this.Type = TokenType.NoType;
     this.Value = '';
@@ -56,6 +61,7 @@ Tokens.prototype = {
 var ParseQueryContext = function(){
     this.Tokens;
     this.ResultFromLastStatement;
+    this.Vars = {};
 };
 
 var IsUrl = function(url){
@@ -74,7 +80,7 @@ var RunFromStatement = function(context){
             loader.load(token.Value, function(html){
                 context.ResultFromLastStatement = html;
                 context.Tokens.MoveNext();
-                //RunNextStatement(context);
+                RunNextStatement(context);
             });
         }
     }
@@ -86,15 +92,15 @@ var RunSelectStatement = function(context){
     if (token.Type == TokenType.Str){
         var html = context.ResultFromLastStatement;
         var parser = parserjs.CreateParser(html);
-        var rets = [];
-        parser.parse(token.Value, function(html, attrs, data){
+        var results = [];
+        parser.Find(token.Value).Parse(function(html, attrs, data){
             var result = {};
             result.html = html;
             result.attrs = attrs;
             result.data = data;
-            rets.push(result);
+            results.push(result);
         });
-        context.ResultFromLastStatement = rets;
+        context.ResultFromLastStatement = results;
         context.Tokens.MoveNext();
         RunNextStatement(context);
     }
@@ -126,21 +132,22 @@ var RunWhereEachStatement = function(context){
     if (context.Tokens.Get().Type == TokenType.Var){
         var sourceName = context.Tokens.Get().Value;
         context.Tokens.MoveNext();
-        context.Tokens.MoveNext();
+        //context.Tokens.MoveNext();
         var token = context.Tokens.Get();
-        if (token.Get().Type == TokenType.Var){
-            var sources = context.Vars[sourceName] || null;
+        //if (token.Type == TokenType.Var){
+            var sources = context.Vars[sourceName].Value || null;
             if (sources != null && sources.length > 0){
                 var indexCurStatement = context.Tokens.GetIndex();
                 for (var i = 0; i < sources.length; i++){
                     var newContext = new ParseQueryContext();
                     newContext.Tokens = context.Tokens;
                     newContext.Tokens.MoveTo(indexCurStatement);
+                    newContext.ResultFromLastStatement = sources[i];
                     context.Tokens.MoveNext();
                     RunNextStatement(newContext);
                 }
             }
-        }
+        //}
     }
 };
 
@@ -205,7 +212,7 @@ var RunNextStatement = function(context){
            break;
 
        case TokenType.As:
-           RunAsStatement(conetxt);
+           RunAsStatement(context);
            break;
 
        case TokenType.WhereEach:
