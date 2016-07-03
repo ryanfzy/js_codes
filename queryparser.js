@@ -16,11 +16,6 @@ var Token = function(){
     this.Value = '';
 };
 
-var Parser = function(){
-    this.parser;
-    this.statements = [];
-};
-
 var Tokens = function(){
     this.tokens = [];
     this.curIndex = 0;
@@ -63,15 +58,23 @@ var ParseQueryContext = function(){
     this.ResultFromLastStatement;
 };
 
+var IsUrl = function(url){
+    if (url.indexOf('http') == 0){
+        return true;
+    }
+    return false;
+};
+
 var RunFromStatement = function(context){
     context.Tokens.MoveNext();
     var token = context.Tokens.Get();
     if (token.Type == TokenType.Str){
         if (IsUrl(token.Value)){
+            var loader = new UrlLoader();
             loader.load(token.Value, function(html){
                 context.ResultFromLastStatement = html;
-                tokens.MoveNext();
-                RunNextStatement(context);
+                context.Tokens.MoveNext();
+                //RunNextStatement(context);
             });
         }
     }
@@ -192,7 +195,7 @@ var DestroyContext = function(context){
 };
 
 var RunNextStatement = function(context){
-   var token = context.tokens.Get(); 
+   var token = context.Tokens.Get(); 
    switch (token.Type){
        case TokenType.From:
            RunFromStatement(context);
@@ -225,9 +228,9 @@ var RunNextStatement = function(context){
    }
 };
 
-Parser.Interpret = function(tokens){
+var Interpret = function(queryTokens){
     var parseQueryContext = new ParseQueryContext();
-    parseQueryContext.Tokens = tokens;
+    parseQueryContext.Tokens = queryTokens;
     RunNextStatement(parseQueryContext);
 };
 
@@ -350,20 +353,9 @@ var GetListOfTokens = function(input){
 
 var QueryParser = function(input){
     var tokens = GetListOfTokens(input);
-    console.log(tokens);
     var queryTokens = GetQueryTokens(tokens);
-    console.log(queryTokens);
 
-    console.log('start');
-    while (queryTokens.HasNext()){
-        var token = queryTokens.Get();
-        console.log(token.Type);
-        console.log(token.Value);
-        queryTokens.MoveNext();
-    }
-    console.log('end');
-    //var parser = new Parser();
-    //parser.Interpret(tokens);
+    Interpret(queryTokens);
 };
 
 var input = "from 'https://careers.mercyascot.co.nz/home'\n" +
