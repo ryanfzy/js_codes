@@ -62,6 +62,7 @@ var ParseQueryContext = function(){
     this.Tokens;
     this.ResultFromLastStatement;
     this.Vars = {};
+    this.RetObj = {};
 };
 
 var IsUrl = function(url){
@@ -84,6 +85,11 @@ var RunFromStatement = function(context){
             });
         }
     }
+    else if (token.Type == TokenType.Var){
+        context.ResultFromLastStatement = GetFieldToAddFromContext(context.Vars, token.Value);
+        context.Tokens.MoveNext();
+        RunNextStatement(context);
+    }
 };
 
 var RunSelectStatement = function(context){
@@ -100,7 +106,7 @@ var RunSelectStatement = function(context){
             result.data = data;
             results.push(result);
         });
-        context.ResultFromLastStatement = results;
+        context.ResultFromLastStatement = results.length > 1 ? results : results[0];
         context.Tokens.MoveNext();
         RunNextStatement(context);
     }
@@ -117,10 +123,13 @@ var RunAsStatement = function(context){
         context.Tokens.MoveNext();
     }
     else if (token.Type == TokenType.VarList){
+        console.log('here');
         for (var i = 0; i < context.ResultFromLastStatement.length; i++){
             var valObj = new ValObj();
+            console.log(context);
+            console.log(token);
             valObj.Name = token.Value[i];
-            vaObj.Value = context.ResultFromLastStetement[i];
+            valObj.Value = context.ResultFromLastStatement[i];
             context.Vars[token.Value[i]] = valObj;
         }
     }
@@ -132,22 +141,22 @@ var RunWhereEachStatement = function(context){
     if (context.Tokens.Get().Type == TokenType.Var){
         var sourceName = context.Tokens.Get().Value;
         context.Tokens.MoveNext();
-        //context.Tokens.MoveNext();
         var token = context.Tokens.Get();
-        //if (token.Type == TokenType.Var){
-            var sources = context.Vars[sourceName].Value || null;
-            if (sources != null && sources.length > 0){
-                var indexCurStatement = context.Tokens.GetIndex();
-                for (var i = 0; i < sources.length; i++){
-                    var newContext = new ParseQueryContext();
-                    newContext.Tokens = context.Tokens;
-                    newContext.Tokens.MoveTo(indexCurStatement);
-                    newContext.ResultFromLastStatement = sources[i];
-                    context.Tokens.MoveNext();
-                    RunNextStatement(newContext);
-                }
+        var sources = context.Vars[sourceName].Value || null;
+        var results = [];
+        if (sources != null && sources.length > 0){
+            var indexCurStatement = context.Tokens.GetIndex();
+            for (var i = 0; i < sources.length; i++){
+                var newContext = new ParseQueryContext();
+                newContext.Tokens = context.Tokens;
+                newContext.Tokens.MoveTo(indexCurStatement);
+                newContext.ResultFromLastStatement = sources[i];
+                newContext.Tokens.MoveNext();
+                RunNextStatement(newContext);
+                results.push(newContext.RetObj);
             }
-        //}
+        }
+        console.log(results);
     }
 };
 
@@ -156,7 +165,8 @@ var GetFieldToAddFromContext = function(vars, key){
     var value = vars[keys[0]].Value;
     if (keys.length > 1){
         for (var i = 1; i < keys.length; i++){
-            value = value[i];
+            var key = keys[i];
+            value = value[key];
         }
     }
     return value;
@@ -176,12 +186,12 @@ var GetForKeyName = function(vars, key){
 
 var RunAddFieldStatement = function(context){
     context.Tokens.MoveNext();
-    var token = cotnext.Tokens.Get();
+    var token = context.Tokens.Get();
     if (token.Type == TokenType.Var){
-        var fieldToAdd = GetFieldToAddFromContext(context.Vars, Token.Value);
+        var fieldToAdd = GetFieldToAddFromContext(context.Vars, token.Value);
         context.Tokens.MoveNext();
         var token2 = context.Tokens.Get();
-        if (tokens.Type == TokenType.ForKey){
+        if (token2.Type == TokenType.ForKey){
             context.Tokens.MoveNext();
             var token3 = context.Tokens.Get();
             var key = GetForKeyName(context.Vars, token3.Value);
@@ -192,7 +202,7 @@ var RunAddFieldStatement = function(context){
     }
 };
 
-var RunAddStatement = function(context){
+var RunAndStatement = function(context){
     context.Tokens.MoveNext();
     RunNextStatement(context);
 };
@@ -223,11 +233,11 @@ var RunNextStatement = function(context){
            RunAddFieldStatement(context);
            break;
 
-       case TokenType.Add:
-           RunAddStatement(context);
+       case TokenType.And:
+           RunAndStatement(context);
            break;
 
-       case Token.Type.Terminate:
+       case TokenType.Terminate:
            break;
 
        default:
@@ -297,6 +307,10 @@ var ToQueryToken = function(token){
             queryToken.Type = TokenType.And;
             break;
 
+        case ';':
+            queryToken.Type = TokenType.Terminate;
+            break;
+
         default:
             queryToken = ToQueryToken2(token);
             break;
@@ -330,6 +344,15 @@ var GetListOfTokens = function(input){
     var token = '';
     for (var i = 0; i < input.length; i++){
         var ch = input[i];
+
+        if (ch == ';' && !foundStr){
+            if (token.length > 0){
+                tokens.push(token);
+                token = '';
+            }
+            tokens.push(';');
+            continue;
+        }
 
         if (ch == ' ' || ch == '\n'){
             if (!foundStr && !foundList){
@@ -370,14 +393,17 @@ var input = "from 'https://careers.mercyascot.co.nz/home'\n" +
             "where-each as ret\n" +
             "from ret.html\n" +
             "select 'div[class=title] a' as href\n" +
-            "add-field href.href for-key 'href'\n" +
+            "add-field href.attrs.href for-key 'href'\n" +
             "and\n" +
+            "from ret.html\n" +
             "select 'div[class=title] a span' as title\n" +
             "add-field title.html for-key 'title'\n" +
             "and\n" +
+            "from ret.html\n" +
             "select 'div[class=description]' as description\n" +
             "add-field description.html for-key 'description'\n" +
             "and\n" +
+            "from ret.html\n" +
             "select 'span[class=detail-item]' as [location, expertise, worktype, level, posteddate, closedate]\n" +
             "where-each as detail\n" +
             "add-field details.data.split('</span>')[self.length-2] for-key details.$name;";
