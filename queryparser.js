@@ -16,11 +16,13 @@ var ValObj = function(){
     this.Value;
 };
 
+// a query token, value has to be interpreted based on the type
 var Token = function(){
     this.Type = TokenType.NoType;
     this.Value = '';
 };
 
+// a stream of query tokens
 var Tokens = function(){
     this.tokens = [];
     this.curIndex = 0;
@@ -58,11 +60,14 @@ Tokens.prototype = {
     },
 };
 
+// keep the status of the interpretation
 var ParseQueryContext = function(){
     this.Tokens;
+    // this should be always be a list
     this.ResultFromLastStatement;
     this.Vars = {};
     this.RetObj = {};
+    this.NestedContext = false;
 };
 
 var IsUrl = function(url){
@@ -72,9 +77,14 @@ var IsUrl = function(url){
     return false;
 };
 
+// interpret the run statement
 var RunFromStatement = function(context){
     context.Tokens.MoveNext();
     var token = context.Tokens.Get();
+    console.log('FROM: ' + token.Value);
+    // if the given param is str, it should be start with 'http'
+    // and we will call the url loader to load the page
+    // before run the next statement
     if (token.Type == TokenType.Str){
         if (IsUrl(token.Value)){
             var loader = new UrlLoader();
@@ -85,6 +95,8 @@ var RunFromStatement = function(context){
             });
         }
     }
+    // if it is a var, we should find it in context.Vars
+    // and we can pass it to the next statement directly
     else if (token.Type == TokenType.Var){
         context.ResultFromLastStatement = GetFieldToAddFromContext(context.Vars, token.Value);
         context.Tokens.MoveNext();
@@ -92,9 +104,58 @@ var RunFromStatement = function(context){
     }
 };
 
+
+// interpret the as statement
+// this statement will save the result from last statement to context.Vars
+// by a given name, so the following statement could refer it by name
+var RunSelectAsStatement = function(context){
+    context.Tokens.MoveNext();
+    var token = context.Tokens.Get();
+    console.log('SELECT-AS: ' + token.Value);
+    // if the give param is a var, save all the results by a single key (the name of the var)
+    if (token.Type == TokenType.Var){
+        //var valObj = new ValObj();
+        //valObj.Name = token.Value;
+        //valObj.Value = context.ResultFromLastStatement;
+        var results = [];
+        for (var i = 0; i < context.ResultFromLastStatement.length; i++){
+            var valObj = new ValObj();
+            valObj.Name = '_' + token.Value + i;
+            valObj.Value = context.ResultFromLastStatement[i];
+            results.push(valObj);
+        }
+        //context.Vars[token.Value] = valObj;
+        context.Vars[token.Value] = results;
+        context.ResultFromLastStatement = results;
+        context.Tokens.MoveNext();
+    }
+    // if the given param is a var list, save each result by each key in
+    // the var list
+    else if (token.Type == TokenType.VarList){
+        //console.log('here');
+        var results = [];
+        for (var i = 0; i < context.ResultFromLastStatement.length; i++){
+            var valObj = new ValObj();
+            //console.log(context);
+            //console.log(token);
+            valObj.Name = token.Value[i];
+            valObj.Value = context.ResultFromLastStatement[i];
+            context.Vars[token.Value[i]] = [valObj];
+            results.push(valObj);
+        }
+        context.ResultFromLastStatement = results;
+        console.log(context.Vars);
+        context.Tokens.MoveNext();
+    }
+    RunNextStatement(context);
+};
+
+// intepret the select statement
 var RunSelectStatement = function(context){
     context.Tokens.MoveNext();
     var token = context.Tokens.Get();
+    console.log('SELECT: ' + token.Value);
+    // given param must be a query string which will be passed to the parser
     if (token.Type == TokenType.Str){
         var html = context.ResultFromLastStatement;
         var parser = parserjs.CreateParser(html);
@@ -106,63 +167,109 @@ var RunSelectStatement = function(context){
             result.data = data;
             results.push(result);
         });
-        context.ResultFromLastStatement = results.length > 1 ? results : results[0];
+        // the parser could return multiple results
+        //context.ResultFromLastStatement = results.length > 1 ? results : results[0];
+        context.ResultFromLastStatement = results;
+        context.Tokens.MoveNext();
+        //RunNextStatement(context);
+        if (context.Tokens.Get().Type == TokenType.As){
+            RunSelectAsStatement(context);
+        }
+        else{
+            RunNextStatement(context);
+        }
+    }
+};
+
+var RunWhereEachAsStatement = function(context){
+    context.Tokens.MoveNext();
+    var token = context.Tokens.Get();
+    console.log('WHERE-EACH-AS: ' + token.Value);
+    if (token.Type == TokenType.Var){
+        var whereEachValObj = context.ResultFromLastStatement;
+        //var valObj = new ValObj();
+        //valObj.Name = whereEachValObj.Name;
+        //valObj.Value = whereEachValObj.Value;
+        //context.Vars[token.Value] = valObj;
+        context.Vars[token.Value] = whereEachValObj;
         context.Tokens.MoveNext();
         RunNextStatement(context);
     }
 };
 
-var RunAsStatement = function(context){
-    context.Tokens.MoveNext();
-    var token = context.Tokens.Get();
-    if (token.Type == TokenType.Var){
-        var valObj = new ValObj();
-        valObj.Name = token.Value;
-        valObj.Value = context.ResultFromLastStatement;
-        context.Vars[token.Value] = valObj;
-        context.Tokens.MoveNext();
-    }
-    else if (token.Type == TokenType.VarList){
-        console.log('here');
-        for (var i = 0; i < context.ResultFromLastStatement.length; i++){
-            var valObj = new ValObj();
-            console.log(context);
-            console.log(token);
-            valObj.Name = token.Value[i];
-            valObj.Value = context.ResultFromLastStatement[i];
-            context.Vars[token.Value[i]] = valObj;
-        }
-    }
-    RunNextStatement(context);
-};
-
+// TODO: need to fix this
 var RunWhereEachStatement = function(context){
+    // we don't need to check the prev token and find
+    // the value from context.Vars
+    // because the objects where this statement need is in context.ResultFromLastStatement
+    /*
     context.Tokens.MovePrev();
+    var sources = [];
     if (context.Tokens.Get().Type == TokenType.Var){
         var sourceName = context.Tokens.Get().Value;
         context.Tokens.MoveNext();
-        var token = context.Tokens.Get();
-        var sources = context.Vars[sourceName].Value || null;
-        var results = [];
-        if (sources != null && sources.length > 0){
-            var indexCurStatement = context.Tokens.GetIndex();
-            for (var i = 0; i < sources.length; i++){
-                var newContext = new ParseQueryContext();
-                newContext.Tokens = context.Tokens;
-                newContext.Tokens.MoveTo(indexCurStatement);
-                newContext.ResultFromLastStatement = sources[i];
-                newContext.Tokens.MoveNext();
+        //var token = context.Tokens.Get();
+        sources = context.Vars[sourceName].Value || null;
+    }
+    else if (context.Tokens.Get().Type == TokenType.VarList){
+        var sourceNames = context.Tokens.Get().Value;
+        console.log(sourceNames);
+        console.log(context.Vars);
+        for (var i = 0; i < sourceNames.length; i++){
+            sources.push(context.Vars[sourceNames[i]].Value);
+        }
+    }
+    */
+    var sources = context.ResultFromLastStatement;
+    var results = [];
+    // for testing purpose
+    //sources = [sources[0]];
+    console.log('WHERE-EACH: ');
+    console.log(sources);
+    if (sources != null && sources.length > 0){
+        var indexCurStatement = context.Tokens.GetIndex();
+        for (var i = 0; i < sources.length; i++){
+            var newContext = new ParseQueryContext();
+            newContext.NestedContext = true;
+            newContext.Tokens = context.Tokens;
+            newContext.Tokens.MoveTo(indexCurStatement);
+            newContext.ResultFromLastStatement = [sources[i]];
+            newContext.Tokens.MoveNext();
+            var nextToken = newContext.Tokens.Get();
+            if (nextToken.Type == TokenType.As){
+                RunWhereEachAsStatement(newContext);
+            }
+            else{
                 RunNextStatement(newContext);
-                results.push(newContext.RetObj);
+            }
+            results.push(newContext.RetObj);
+        }
+    }
+    console.log('WHERE-EACH results:');
+    console.log(results);
+    if (context.NestedContext && results.length > 0){
+        for (var i = 0; i < results.length; i++){
+            var result = results[i];
+            var keys = Object.keys(result);
+            for (var j = 0; j < keys.length; j++){
+                var key = keys[j];
+                context.RetObj[key] = result[key];
             }
         }
-        console.log(results);
     }
 };
 
 var GetFieldToAddFromContext = function(vars, key){
     var keys = key.split('.');
-    var value = vars[keys[0]].Value;
+    var value = vars[keys[0]];
+    /* we are expecting the value has only one elem
+    //TODO
+    if (value.length > 1){
+        // log a warning message
+    }*/
+    console.log(vars);
+    console.log(value);
+    var value = value[0].Value;
     if (keys.length > 1){
         for (var i = 1; i < keys.length; i++){
             var key = keys[i];
@@ -173,15 +280,25 @@ var GetFieldToAddFromContext = function(vars, key){
 };
 
 var GetForKeyName = function(vars, key){
-    var keys = key.split('.');
-    if (keys.length < 2){
-        return keys;
+    var name = '';
+    if (key.Type == TokenType.Str){
+        name = key.Value;
     }
-    else if (keys[1][0] == '$'){
-        var valObj = vars[keys[0]];
-        var k = keys[i].substr(1);
-        return valObj[k];
+    else if (key.Type == TokenType.Var){
+        var keys = key.Value.split('.');
+        console.log(vars);
+        console.log(keys);
+        /*
+        if (keys.length < 2){
+            name = GetFieldToAddFromContext(vars, key);
+        }*/
+        if (keys[1][0] == '$'){
+            var valObj = vars[keys[0]][0];
+            var k = keys[1].substr(1);
+            name = valObj[k];
+        }
     }
+    return name;
 };
 
 var RunAddFieldStatement = function(context){
@@ -189,13 +306,16 @@ var RunAddFieldStatement = function(context){
     var token = context.Tokens.Get();
     if (token.Type == TokenType.Var){
         var fieldToAdd = GetFieldToAddFromContext(context.Vars, token.Value);
+        console.log('ADD-FIELD: ' + fieldToAdd);
         context.Tokens.MoveNext();
         var token2 = context.Tokens.Get();
         if (token2.Type == TokenType.ForKey){
             context.Tokens.MoveNext();
             var token3 = context.Tokens.Get();
-            var key = GetForKeyName(context.Vars, token3.Value);
+            var key = GetForKeyName(context.Vars, token3);
+            console.log('FOR-KEY: ' + key);
             context.RetObj[key] = fieldToAdd;
+            console.log(context.RetObj);
             context.Tokens.MoveNext();
         }
         RunNextStatement(context);
@@ -203,6 +323,7 @@ var RunAddFieldStatement = function(context){
 };
 
 var RunAndStatement = function(context){
+    console.log('AND:');
     context.Tokens.MoveNext();
     RunNextStatement(context);
 };
@@ -221,9 +342,11 @@ var RunNextStatement = function(context){
            RunSelectStatement(context);
            break;
 
+           /*
        case TokenType.As:
            RunAsStatement(context);
            break;
+           */
 
        case TokenType.WhereEach:
            RunWhereEachStatement(context);
@@ -406,6 +529,6 @@ var input = "from 'https://careers.mercyascot.co.nz/home'\n" +
             "from ret.html\n" +
             "select 'span[class=detail-item]' as [location, expertise, worktype, level, posteddate, closedate]\n" +
             "where-each as detail\n" +
-            "add-field details.data.split('</span>')[self.length-2] for-key details.$name;";
+            "add-field detail.html for-key detail.$Name;";
 
 QueryParser(input);
