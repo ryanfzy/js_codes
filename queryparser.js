@@ -1,3 +1,47 @@
+// helper function for the add-field statement
+var GetFieldToAddFromContext = function(vars, key){
+    var keys = key.split('.');
+    // this is a list, we only check the first element
+    var value = vars[keys[0]];
+    var value = value[0].Value;
+    if (keys.length > 1){
+        for (var i = 1; i < keys.length; i++){
+            var key = keys[i];
+            value = value[key];
+        }
+    }
+    return value;
+};
+
+// helper function for the for-key statement
+// a key might be a string or the value of a field of a ValObj
+var GetForKeyName = function(vars, key){
+    var name = '';
+    if (key.Type == TokenType.Str){
+        name = key.Value;
+    }
+    else if (key.Type == TokenType.Var){
+        var keys = key.Value.split('.');
+        // we support expression like key.$fieldName
+        if (keys[1][0] == '$'){
+            // get the first element of a Var
+            var valObj = vars[keys[0]][0];
+            var k = keys[1].substr(1);
+            name = valObj[k] || '';
+        }
+    }
+    return name;
+};
+
+// helper functions
+var IsUrl = function(url){
+    if (url.indexOf('http') == 0){
+        return true;
+    }
+    return false;
+};
+
+// token types
 var TokenType = {};
 TokenType.NoType = -1;
 TokenType.From = 0;
@@ -63,32 +107,42 @@ Tokens.prototype = {
 // keep the status of the interpretation
 var ParseQueryContext = function(){
     this.Tokens;
+
     // this should be always be a list
+    // that is [r1, r1, ...]
     this.ResultFromLastStatement;
+
+    // by convension, each var should be always a list
+    // and each element in the list is a ValObj
+    // that is {k1:[v1, v2, ...], k2:[v1], ...}
     this.Vars = {};
+
+    // this is a simple dict
+    // that is {k1:v1, k2:v2, ...}
     this.RetObj = {};
+
+    // currently, only where-as statement will set this is true
+    // so the first where-as will return a list
+    // but all nested where-as will return merge its RetObj to its parent's RetObj
     this.NestedContext = false;
 };
 
-var IsUrl = function(url){
-    if (url.indexOf('http') == 0){
-        return true;
-    }
-    return false;
-};
 
 // interpret the run statement
 var RunFromStatement = function(context){
     context.Tokens.MoveNext();
     var token = context.Tokens.Get();
     console.log('FROM: ' + token.Value);
-    // if the given param is str, it should be start with 'http'
+    // if the given param is str, it should be a url
     // and we will call the url loader to load the page
     // before run the next statement
     if (token.Type == TokenType.Str){
         if (IsUrl(token.Value)){
             var loader = new UrlLoader();
             loader.load(token.Value, function(html){
+                // TODO: this seems like an issue, because this won't set
+                // the result as a list
+                // we thinks the follow statement must be select statement
                 context.ResultFromLastStatement = html;
                 context.Tokens.MoveNext();
                 RunNextStatement(context);
@@ -105,48 +159,47 @@ var RunFromStatement = function(context){
 };
 
 
-// interpret the as statement
-// this statement will save the result from last statement to context.Vars
+// interpret the as statement that is after the select statement
+// this statement will save the result from the select statement to context.Vars
 // by a given name, so the following statement could refer it by name
 var RunSelectAsStatement = function(context){
     context.Tokens.MoveNext();
     var token = context.Tokens.Get();
     console.log('SELECT-AS: ' + token.Value);
+    
+    var results = [];
+
     // if the give param is a var, save all the results by a single key (the name of the var)
     if (token.Type == TokenType.Var){
-        //var valObj = new ValObj();
-        //valObj.Name = token.Value;
-        //valObj.Value = context.ResultFromLastStatement;
-        var results = [];
         for (var i = 0; i < context.ResultFromLastStatement.length; i++){
             var valObj = new ValObj();
+            // we create the name for the user
             valObj.Name = '_' + token.Value + i;
             valObj.Value = context.ResultFromLastStatement[i];
             results.push(valObj);
         }
-        //context.Vars[token.Value] = valObj;
         context.Vars[token.Value] = results;
-        context.ResultFromLastStatement = results;
-        context.Tokens.MoveNext();
     }
     // if the given param is a var list, save each result by each key in
     // the var list
     else if (token.Type == TokenType.VarList){
-        //console.log('here');
         var results = [];
         for (var i = 0; i < context.ResultFromLastStatement.length; i++){
             var valObj = new ValObj();
-            //console.log(context);
-            //console.log(token);
             valObj.Name = token.Value[i];
             valObj.Value = context.ResultFromLastStatement[i];
+            // each var should always refers to a list of ValObj
             context.Vars[token.Value[i]] = [valObj];
             results.push(valObj);
         }
-        context.ResultFromLastStatement = results;
-        console.log(context.Vars);
-        context.Tokens.MoveNext();
     }
+    // end function if neither the case
+    else{
+        return;
+    }
+
+    context.ResultFromLastStatement = results;
+    context.Tokens.MoveNext();
     RunNextStatement(context);
 };
 
@@ -155,8 +208,11 @@ var RunSelectStatement = function(context){
     context.Tokens.MoveNext();
     var token = context.Tokens.Get();
     console.log('SELECT: ' + token.Value);
+
     // given param must be a query string which will be passed to the parser
     if (token.Type == TokenType.Str){
+        // TODO: this seems like an issue
+        // we think that the prev statement must be from statement
         var html = context.ResultFromLastStatement;
         var parser = parserjs.CreateParser(html);
         var results = [];
@@ -167,79 +223,64 @@ var RunSelectStatement = function(context){
             result.data = data;
             results.push(result);
         });
-        // the parser could return multiple results
-        //context.ResultFromLastStatement = results.length > 1 ? results : results[0];
+
+        // the result should always be a list
         context.ResultFromLastStatement = results;
         context.Tokens.MoveNext();
-        //RunNextStatement(context);
+
         if (context.Tokens.Get().Type == TokenType.As){
             RunSelectAsStatement(context);
         }
         else{
+            // TODO: currently, if it runs into here, there would be problem
             RunNextStatement(context);
         }
     }
 };
 
+// interpret the as stetement after the where-each statement
 var RunWhereEachAsStatement = function(context){
     context.Tokens.MoveNext();
     var token = context.Tokens.Get();
     console.log('WHERE-EACH-AS: ' + token.Value);
+
     if (token.Type == TokenType.Var){
         var whereEachValObj = context.ResultFromLastStatement;
-        //var valObj = new ValObj();
-        //valObj.Name = whereEachValObj.Name;
-        //valObj.Value = whereEachValObj.Value;
-        //context.Vars[token.Value] = valObj;
+        // just give a different name
         context.Vars[token.Value] = whereEachValObj;
         context.Tokens.MoveNext();
         RunNextStatement(context);
     }
 };
 
-// TODO: need to fix this
+// interpret where-each statement
 var RunWhereEachStatement = function(context){
-    // we don't need to check the prev token and find
-    // the value from context.Vars
-    // because the objects where this statement need is in context.ResultFromLastStatement
-    /*
-    context.Tokens.MovePrev();
-    var sources = [];
-    if (context.Tokens.Get().Type == TokenType.Var){
-        var sourceName = context.Tokens.Get().Value;
-        context.Tokens.MoveNext();
-        //var token = context.Tokens.Get();
-        sources = context.Vars[sourceName].Value || null;
-    }
-    else if (context.Tokens.Get().Type == TokenType.VarList){
-        var sourceNames = context.Tokens.Get().Value;
-        console.log(sourceNames);
-        console.log(context.Vars);
-        for (var i = 0; i < sourceNames.length; i++){
-            sources.push(context.Vars[sourceNames[i]].Value);
-        }
-    }
-    */
+    // we depends the result from last statement is a list
     var sources = context.ResultFromLastStatement;
     var results = [];
+
     // for testing purpose
     //sources = [sources[0]];
+
     console.log('WHERE-EACH: ');
-    console.log(sources);
     if (sources != null && sources.length > 0){
         var indexCurStatement = context.Tokens.GetIndex();
         for (var i = 0; i < sources.length; i++){
+            // create a new context for nested statements
+            // currently, nested or child statement cannot see their parents
             var newContext = new ParseQueryContext();
             newContext.NestedContext = true;
             newContext.Tokens = context.Tokens;
             newContext.Tokens.MoveTo(indexCurStatement);
             newContext.ResultFromLastStatement = [sources[i]];
             newContext.Tokens.MoveNext();
+
             var nextToken = newContext.Tokens.Get();
             if (nextToken.Type == TokenType.As){
                 RunWhereEachAsStatement(newContext);
             }
             else{
+                //TODO: if you are here, you are screwed
                 RunNextStatement(newContext);
             }
             results.push(newContext.RetObj);
@@ -247,6 +288,8 @@ var RunWhereEachStatement = function(context){
     }
     console.log('WHERE-EACH results:');
     console.log(results);
+
+    // for nested statements, merge their RetObj with their parent's RetObj
     if (context.NestedContext && results.length > 0){
         for (var i = 0; i < results.length; i++){
             var result = results[i];
@@ -259,52 +302,12 @@ var RunWhereEachStatement = function(context){
     }
 };
 
-var GetFieldToAddFromContext = function(vars, key){
-    var keys = key.split('.');
-    var value = vars[keys[0]];
-    /* we are expecting the value has only one elem
-    //TODO
-    if (value.length > 1){
-        // log a warning message
-    }*/
-    console.log(vars);
-    console.log(value);
-    var value = value[0].Value;
-    if (keys.length > 1){
-        for (var i = 1; i < keys.length; i++){
-            var key = keys[i];
-            value = value[key];
-        }
-    }
-    return value;
-};
-
-var GetForKeyName = function(vars, key){
-    var name = '';
-    if (key.Type == TokenType.Str){
-        name = key.Value;
-    }
-    else if (key.Type == TokenType.Var){
-        var keys = key.Value.split('.');
-        console.log(vars);
-        console.log(keys);
-        /*
-        if (keys.length < 2){
-            name = GetFieldToAddFromContext(vars, key);
-        }*/
-        if (keys[1][0] == '$'){
-            var valObj = vars[keys[0]][0];
-            var k = keys[1].substr(1);
-            name = valObj[k];
-        }
-    }
-    return name;
-};
-
+// interpret the add-field statement
 var RunAddFieldStatement = function(context){
     context.Tokens.MoveNext();
     var token = context.Tokens.Get();
     if (token.Type == TokenType.Var){
+        // get the value we want to add into RetObj
         var fieldToAdd = GetFieldToAddFromContext(context.Vars, token.Value);
         console.log('ADD-FIELD: ' + fieldToAdd);
         context.Tokens.MoveNext();
@@ -312,8 +315,10 @@ var RunAddFieldStatement = function(context){
         if (token2.Type == TokenType.ForKey){
             context.Tokens.MoveNext();
             var token3 = context.Tokens.Get();
+            // get the key that refers to the value in RetObj
             var key = GetForKeyName(context.Vars, token3);
             console.log('FOR-KEY: ' + key);
+            // add the field
             context.RetObj[key] = fieldToAdd;
             console.log(context.RetObj);
             context.Tokens.MoveNext();
@@ -322,15 +327,18 @@ var RunAddFieldStatement = function(context){
     }
 };
 
+// interpret the and statement
+// currently it did nothing
 var RunAndStatement = function(context){
     console.log('AND:');
     context.Tokens.MoveNext();
     RunNextStatement(context);
 };
 
+/*
 var DestroyContext = function(context){
     context = new ParseQueryContext();
-};
+};*/
 
 var RunNextStatement = function(context){
    var token = context.Tokens.Get(); 
