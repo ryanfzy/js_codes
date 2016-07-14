@@ -1,4 +1,18 @@
 var queryparserjs = (function(){
+    var nestedStatements = 0;
+
+    var StartNestedStatement = function(){
+        nestedStatement++;
+    };
+
+    var FinishNestedStatement = function(){
+        nestedStatement--;
+    };
+
+    var NoMoreNestedStatement = function(){
+        return nestedStatement == 0;
+    };
+
     // helper function for the add-field statement
     var GetFieldToAddFromContext = function(vars, key){
         var keys = key.split('.');
@@ -126,6 +140,9 @@ var queryparserjs = (function(){
         // so the first where-as will return a list
         // but all nested where-as will return merge its RetObj to its parent's RetObj
         this.NestedContext = false;
+
+        // this callback will be called for each result
+        this.OnSuccess = function(ret){};
     };
     
     
@@ -301,8 +318,13 @@ var queryparserjs = (function(){
                 }
             }
         }
-
-        context.ResultFromLastStatement = results;
+        // TODO:this is a temp fix, must be find another way to run the success
+        // callback
+        else if (!context.NestedContext){
+            for (var i = 0; i < results.length; i ++){
+                context.OnSuccess(results[i]);
+            }
+        };
     };
     
     // interpret the add-field statement
@@ -342,6 +364,10 @@ var queryparserjs = (function(){
     var DestroyContext = function(context){
         context = new ParseQueryContext();
     };*/
+
+    var RunTerminateStatement = function(context){
+        console.log('temrinate');    
+    };
     
     var RunNextStatement = function(context){
        var token = context.Tokens.Get(); 
@@ -372,6 +398,7 @@ var queryparserjs = (function(){
                break;
     
            case TokenType.Terminate:
+               RunTerminateStatement(context);
                break;
     
            default:
@@ -510,7 +537,7 @@ var queryparserjs = (function(){
         return tokens;
     };
     
-    var QueryParser = function(input){
+    var QueryParser = function(input, onSuccess){
         console.log("==== queryparserjs start =====");
         var tokens = GetListOfTokens(input);
         var queryTokens = GetQueryTokens(tokens);
@@ -519,9 +546,10 @@ var queryparserjs = (function(){
         console.log("==== queryparserjs finished ====");
     };
 
-    var Interpret = function(queryTokens){
+    var Interpret = function(queryTokens, onSuccess){
         var parseQueryContext = new ParseQueryContext();
         parseQueryContext.Tokens = queryTokens;
+        parseQueryContext.OnSuccess = onSuccess;
         RunNextStatement(parseQueryContext);
     };
     
