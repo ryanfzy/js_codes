@@ -536,7 +536,7 @@ var queryparserjs = (function(){
     
         return tokens;
     };
-    
+
     var QueryParser = function(input, onSuccess){
         console.log("==== queryparserjs start =====");
         var tokens = GetListOfTokens(input);
