@@ -142,7 +142,10 @@ var queryparserjs = (function(){
         this.NestedContext = false;
 
         // this callback will be called for each result
-        this.OnSuccess = function(ret){};
+        this.ForEachFn = function(ret){};
+
+        // this call back will be called when all the work is done
+        this.WhenAllFinishFn = null;
     };
     
     
@@ -320,11 +323,15 @@ var queryparserjs = (function(){
         }
         // TODO:this is a temp fix, must be find another way to run the success
         // callback
-        else if (!context.NestedContext){
+        else if (!context.NestedContext && context.ForEachFn != null){
             for (var i = 0; i < results.length; i ++){
-                context.OnSuccess(results[i]);
+                context.ForEachFn(results[i]);
             }
         };
+
+        if (context.WhenAllFinishFn !=null){
+            context.WhenAllFinishFn();
+        }
     };
     
     // interpret the add-field statement
@@ -552,9 +559,22 @@ var queryparserjs = (function(){
         parseQueryContext.OnSuccess = onSuccess;
         RunNextStatement(parseQueryContext);
     };
+
+    var QueryParserEx = function(input, parameter){
+        console.log("==== queryparserjs start =====");
+        var parseQueryContext = new ParseQueryContext();
+        var tokens = GetListOfTokens(input);
+        var queryTokens = GetQueryTokens(tokens);
+        parseQueryContext.Tokens = queryTokens;
+        parseQueryContext.ForEachFn = parameter['forEach'];
+        parseQueryContext.WhenAllFinishFn = parameter['whenAllFinish'];
+        RunNextStatement(parseQueryContext);
+        console.log("==== queryparserjs finished ====");
+    };
     
     return {
-        Interpret : QueryParser
+        Interpret : QueryParser,
+        InterpretEx : QueryParserEx
     }
 })();
 
@@ -579,6 +599,13 @@ var input = "from 'https://careers.mercyascot.co.nz/home'\n" +
             "where-each as detail\n" +
             "add-field detail.html for-key detail.$Name;";
 
-queryparserjs.Interpret(input, function(ret){
-    console.log(ret);
-});
+queryparserjs.InterpretEx(input, 
+    {
+        forEach : function(ret){
+            console.log(ret);
+        },
+        whenAllFinish : function(){
+            console.log('all finish');
+        }
+    }
+);
