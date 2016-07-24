@@ -1,4 +1,5 @@
 var queryparserjs = (function(){
+    /*
     var nestedStatements = 0;
 
     var StartNestedStatement = function(){
@@ -8,6 +9,7 @@ var queryparserjs = (function(){
     var FinishNestedStatement = function(){
         nestedStatement--;
     };
+    */
 
     var NoMoreNestedStatement = function(){
         return nestedStatement == 0;
@@ -141,8 +143,11 @@ var queryparserjs = (function(){
         // but all nested where-as will return merge its RetObj to its parent's RetObj
         this.NestedContext = false;
 
+        // this callback will be passed all the results
+        this.AllFinishFn = null;
+
         // this callback will be called for each result
-        this.ForEachFn = function(ret){};
+        this.ForEachFn = null;
 
         // this call back will be called when all the work is done
         this.WhenAllFinishFn = null;
@@ -273,6 +278,15 @@ var queryparserjs = (function(){
             RunNextStatement(context);
         }
     };
+
+    var _merge2RetObjs = function(toRetObj, fromRetObj){
+        var keys = Object.keys(fromRetObj);
+        for (var i = 0; i < keys.length; i++){
+            var key = keys[i];
+            toRetObj[key] = fromRetObj[key];
+        }
+        return toRetObj;
+    };
     
     // interpret where-each statement
     var RunWhereEachStatement = function(context){
@@ -301,37 +315,27 @@ var queryparserjs = (function(){
                     RunWhereEachAsStatement(newContext);
                 }
                 else{
-                    //TODO: if you are here, you are screwed
+                    //TODO: if you are here, means that the caller didn't
+                    // give a name to where-each element
+                    // maybe we should create a name for it
                     RunNextStatement(newContext);
                 }
-                results.push(newContext.RetObj);
+
+                // for nested statements, combine the child's RetObj with parent's RetObj
+                if (context.NestedContext){
+                    context.RetObj = _merge2RetObjs(context.RetObj, newContext.RetObj);
+                }
+                // for non-nested statement, add RetObj to ResultFromLastStatement
+                else{
+                    results.push(newContext.RetObj);
+                }
             }
         }
         console.log('WHERE-EACH results:');
         console.log(results);
-    
-        // for nested statements, merge their RetObj with their parent's RetObj
-        if (context.NestedContext && results.length > 0){
-            for (var i = 0; i < results.length; i++){
-                var result = results[i];
-                var keys = Object.keys(result);
-                for (var j = 0; j < keys.length; j++){
-                    var key = keys[j];
-                    context.RetObj[key] = result[key];
-                }
-            }
-        }
-        // TODO:this is a temp fix, must be find another way to run the success
-        // callback
-        else if (!context.NestedContext && context.ForEachFn != null){
-            for (var i = 0; i < results.length; i ++){
-                context.ForEachFn(results[i]);
-            }
-        };
 
-        if (context.WhenAllFinishFn !=null){
-            context.WhenAllFinishFn();
-        }
+        context.ResultFromLastStatement = results;
+        RunTerminateStatement(context);
     };
     
     // interpret the add-field statement
@@ -373,7 +377,27 @@ var queryparserjs = (function(){
     };*/
 
     var RunTerminateStatement = function(context){
-        console.log('temrinate');    
+        if (!context.NestedContext){
+            console.log('terminate query');
+            var results = context.ResultFromLastStatement;
+
+            if (context.AllFinishFn != null){
+                context.AllFinishFn(results);
+            }
+
+            if (context.ForEachFn != null){
+                for (var i = 0; i < results.length; i ++){
+                    context.ForEachFn(results[i]);
+                }
+            };
+
+            if (context.WhenAllFinishFn !=null){
+                context.WhenAllFinishFn();
+            }
+        }
+        else{
+            console.log('temrinate statement');    
+        }
     };
     
     var RunNextStatement = function(context){
@@ -544,19 +568,19 @@ var queryparserjs = (function(){
         return tokens;
     };
 
-    var QueryParser = function(input, onSuccess){
+    var QueryParser = function(input, onAllFinish){
         console.log("==== queryparserjs start =====");
         var tokens = GetListOfTokens(input);
         var queryTokens = GetQueryTokens(tokens);
     
-        Interpret(queryTokens, onSuccess);
+        Interpret(queryTokens, onAllFinish);
         console.log("==== queryparserjs finished ====");
     };
 
-    var Interpret = function(queryTokens, onSuccess){
+    var Interpret = function(queryTokens, onAllFinish){
         var parseQueryContext = new ParseQueryContext();
         parseQueryContext.Tokens = queryTokens;
-        parseQueryContext.OnSuccess = onSuccess;
+        parseQueryContext.AllFinishFn = onAllFinish;
         RunNextStatement(parseQueryContext);
     };
 
@@ -599,13 +623,7 @@ var input = "from 'https://careers.mercyascot.co.nz/home'\n" +
             "where-each as detail\n" +
             "add-field detail.html for-key detail.$Name;";
 
-queryparserjs.InterpretEx(input, 
-    {
-        forEach : function(ret){
-            console.log(ret);
-        },
-        whenAllFinish : function(){
-            console.log('all finish');
-        }
-    }
-);
+queryparserjs.Interpret(input, function(rets){
+    console.log('all results')
+    console.log(rets);
+});
