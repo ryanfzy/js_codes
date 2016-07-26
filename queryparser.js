@@ -1,33 +1,69 @@
 var queryparserjs = (function(){
-    /*
-    var nestedStatements = 0;
 
-    var StartNestedStatement = function(){
-        nestedStatement++;
-    };
+    // token types
+    var TokenType = {};
+    TokenType.NoType = -1;
+    TokenType.From = 0;
+    TokenType.Select = 1;
+    TokenType.As = 2;
+    TokenType.AddField = 3;
+    TokenType.ForKey = 4;
+    TokenType.And = 5;
+    TokenType.WhereEach = 6;
+    TokenType.Str = 7;
+    TokenType.Var = 8;
+    TokenType.VarList = 9;
 
-    var FinishNestedStatement = function(){
-        nestedStatement--;
-    };
-    */
-
-    var NoMoreNestedStatement = function(){
-        return nestedStatement == 0;
-    };
-
-    // helper function for the add-field statement
-    var GetFieldToAddFromContext = function(vars, key){
+    var _getFieldFromVar = function(vars, key){
         var keys = key.split('.');
         // this is a list, we only check the first element
         var value = vars[keys[0]];
-        var value = value[0].Value;
-        if (keys.length > 1){
-            for (var i = 1; i < keys.length; i++){
-                var key = keys[i];
-                value = value[key];
+        if (value != null){
+            var value = value[0].Value;
+            if (keys.length > 1){
+                for (var i = 1; i < keys.length; i++){
+                    var key = keys[i];
+                    value = value[key];
+                }
             }
         }
+        else{
+            value = key;
+        }
         return value;
+    };
+
+    var _getFieldFromStr = function(vars, value){
+        var pat = /\$\{.*?\}/g;
+        var matches = value.match(pat);
+        var substrs = value.split(pat);
+
+        // get the keys, then use the keys to get the values
+        var keys = [];
+        for (var i = 0; i < matches.length; i++){
+            var match = matches[i];
+            var key = match.substring(2, match.length - 1);
+            keys.push(_getFieldFromVar(vars, key));
+        }
+        
+        // get the return value
+        var value = substrs[0];
+        for (var i = 1; i < substrs.length; i++){
+            value += keys[i-1];
+            value += substrs[i];
+        }
+        return value;
+    };
+
+    // helper function for the add-field statement
+    var _getFieldToAddFromContext = function(vars, token){
+        if (token.Type == TokenType.Str){
+            return _getFieldFromStr(vars, token.Value);
+        }
+        else if (token.Type == TokenType.Var){
+            return _getFieldFromVar(vars, token.Value);
+        }
+        return token.Value;
     };
     
     // helper function for the for-key statement
@@ -58,19 +94,6 @@ var queryparserjs = (function(){
         return false;
     };
     
-    // token types
-    var TokenType = {};
-    TokenType.NoType = -1;
-    TokenType.From = 0;
-    TokenType.Select = 1;
-    TokenType.As = 2;
-    TokenType.AddField = 3;
-    TokenType.ForKey = 4;
-    TokenType.And = 5;
-    TokenType.WhereEach = 6;
-    TokenType.Str = 7;
-    TokenType.Var = 8;
-    TokenType.VarList = 9;
     
     var ValObj = function(){
         this.Name;
@@ -178,7 +201,7 @@ var queryparserjs = (function(){
         // if it is a var, we should find it in context.Vars
         // and we can pass it to the next statement directly
         else if (token.Type == TokenType.Var){
-            context.ResultFromLastStatement = GetFieldToAddFromContext(context.Vars, token.Value);
+            context.ResultFromLastStatement = _getFieldToAddFromContext(context.Vars, token);
             context.Tokens.MoveNext();
             RunNextStatement(context);
         }
@@ -342,9 +365,9 @@ var queryparserjs = (function(){
     var RunAddFieldStatement = function(context){
         context.Tokens.MoveNext();
         var token = context.Tokens.Get();
-        if (token.Type == TokenType.Var){
+        if (token.Type == TokenType.Var || token.Type == TokenType.Str){
             // get the value we want to add into RetObj
-            var fieldToAdd = GetFieldToAddFromContext(context.Vars, token.Value);
+            var fieldToAdd = _getFieldToAddFromContext(context.Vars, token);
             console.log('ADD-FIELD: ' + fieldToAdd);
             context.Tokens.MoveNext();
             var token2 = context.Tokens.Get();
@@ -608,7 +631,7 @@ var input = "from 'https://careers.mercyascot.co.nz/home'\n" +
             "where-each as ret\n" +
             "from ret.html\n" +
             "select 'div[class=title] a' as href\n" +
-            "add-field href.attrs.href for-key 'href'\n" +
+            "add-field 'https://careers.mercyascot.co.nz/${href.attrs.href}' for-key 'href'\n" +
             "and\n" +
             "from ret.html\n" +
             "select 'div[class=title] a span' as title\n" +
