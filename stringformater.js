@@ -14,6 +14,13 @@ var stringformatterjs = (function(){
             var exp = match.substring(2, match.length-1);
 
             var parts = exp.split('|');
+            
+            // remove spaces at the ends of the key
+            for (var p = 0; p < parts.length; p++){
+                parts[p] = parts[p].trim();
+            }
+
+            // first part is the key
             var key = parts[0];
 
             // if scope has the value for the key, replace the key
@@ -25,8 +32,8 @@ var stringformatterjs = (function(){
                 // if user providers a filter, filter the replace string
                 if (filter && parts.length > 1){
                     var fNames = parts.slice(1)
-                    for (var j = 0; j < fNames.length; j++){
-                        var fName = fNames[j];
+                    for (var n = 0; n < fNames.length; n++){
+                        var fName = fNames[n];
                         var replace = filter[fName](replace);
                     }
                 }
