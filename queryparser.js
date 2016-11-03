@@ -1,5 +1,9 @@
 var queryparserjs = (function(){
 
+    ////////////////////////////////////////////////////////////////////////////
+    // data structures
+    ////////////////////////////////////////////////////////////////////////////
+
     // token types
     var TokenType = {};
     TokenType.NoType = -1;
@@ -14,16 +18,56 @@ var queryparserjs = (function(){
     TokenType.Var = 8;
     TokenType.VarList = 9;
 
-    var _getFieldFromVar = function(vars, key){
-        var keys = key.split('.');
+    ////////////////////////////////////////////////////////////////////////////
+    // field evaluator
+    ////////////////////////////////////////////////////////////////////////////
+
+    var _fns = {
+        Split : function(data, sep){
+            return data.split(sep);
+        },
+        LastItem : function(data){
+            return data[data.length-1];
+        }
+    };
+
+    var _getEvaluatedField = function(value, key){
+        var parts = key.split('(');
+        if (parts.length < 2){
+            return value[parts[0]];
+        }
+        
+        var fnName = parts[0];
+        var params = [];
+        if (parts[1].length > 1){
+            params = parts[1].substring(0, parts[1].length-1).split('.');
+            for (var p = 0; p < params.length; p++){
+                params[p] = params[p].trim();
+                if (params[p][0] == "'"){
+                    params[p] = params[p].substring(1, params[p].length - 1);
+                }
+            }
+        }
+
+        if (fnName in _fns){
+            return _fns[fnName].apply(null, [value].concat(params));
+        }
+        return value;
+    };
+
+    // evaluate a expression
+    var _getEvaluatedExp = function(vars, exp){
+        var parts = exp.split('.');
         // this is a list, we only check the first element
-        var value = vars[keys[0]];
+        var value = vars[parts[0]];
         if (value != null){
             var value = value[0].Value;
-            if (keys.length > 1){
-                for (var i = 1; i < keys.length; i++){
-                    var key = keys[i];
-                    value = value[key];
+            if (parts.length > 1){
+                for (var i = 1; i < parts.length; i++){
+                    var key = parts[i];
+                    //value = value[key];
+                    value = _getEvaluatedField(value, key);
+                    console.log(value);
                 }
             }
         }
@@ -33,7 +77,8 @@ var queryparserjs = (function(){
         return value;
     };
 
-    var _getFieldFromStr = function(vars, value){
+    // evaluate a string
+    var _getEvaluatedStr = function(vars, value){
         var pat = /\$\{.*?\}/g;
         var matches = value.match(pat);
         var substrs = value.split(pat);
@@ -43,7 +88,7 @@ var queryparserjs = (function(){
         for (var i = 0; i < matches.length; i++){
             var match = matches[i];
             var key = match.substring(2, match.length - 1);
-            keys.push(_getFieldFromVar(vars, key));
+            keys.push(_getEvaluatedExp(vars, key));
         }
         
         // get the return value
@@ -56,12 +101,12 @@ var queryparserjs = (function(){
     };
 
     // helper function for the add-field statement
-    var _getFieldToAddFromContext = function(vars, token){
+    var _getFieldToAdd = function(vars, token){
         if (token.Type == TokenType.Str){
-            return _getFieldFromStr(vars, token.Value);
+            return _getEvaluatedStr(vars, token.Value);
         }
         else if (token.Type == TokenType.Var){
-            return _getFieldFromVar(vars, token.Value);
+            return _getEvaluatedExp(vars, token.Value);
         }
         return token.Value;
     };
@@ -124,11 +169,12 @@ var queryparserjs = (function(){
     
         MovePrev : function(){
             this.curIndex--;
-            return this.tokens[this.curIdnex];
+            return this.Get();
         },
     
         MoveNext : function(){
             this.curIndex++;
+            return this.Get();
         },
     
         HasNext : function(){
@@ -176,19 +222,20 @@ var queryparserjs = (function(){
         this.WhenAllFinishFn = null;
     };
     
-    
+    ////////////////////////////////////////////////////////////////////////////
+    // interpreter
+    ////////////////////////////////////////////////////////////////////////////
+
     // interpret the run statement
     var RunFromStatement = function(context){
-        context.Tokens.MoveNext();
-        var token = context.Tokens.Get();
+        var token = context.Tokens.MoveNext();
         console.log('FROM: ' + token.Value);
         // if the given param is str, it should be a url
         // and we will call the url loader to load the page
         // before run the next statement
         if (token.Type == TokenType.Str){
             if (IsUrl(token.Value)){
-                var loader = new UrlLoader();
-                loader.load(token.Value, function(html){
+                urlloaderjs.Load(token.Value, function(html){
                     // TODO: this seems like an issue, because this won't set
                     // the result as a list
                     // we thinks the follow statement must be select statement
@@ -201,7 +248,7 @@ var queryparserjs = (function(){
         // if it is a var, we should find it in context.Vars
         // and we can pass it to the next statement directly
         else if (token.Type == TokenType.Var){
-            context.ResultFromLastStatement = _getFieldToAddFromContext(context.Vars, token);
+            context.ResultFromLastStatement = _getFieldToAdd(context.Vars, token);
             context.Tokens.MoveNext();
             RunNextStatement(context);
         }
@@ -367,7 +414,7 @@ var queryparserjs = (function(){
         var token = context.Tokens.Get();
         if (token.Type == TokenType.Var || token.Type == TokenType.Str){
             // get the value we want to add into RetObj
-            var fieldToAdd = _getFieldToAddFromContext(context.Vars, token);
+            var fieldToAdd = _getFieldToAdd(context.Vars, token);
             console.log('ADD-FIELD: ' + fieldToAdd);
             context.Tokens.MoveNext();
             var token2 = context.Tokens.Get();
@@ -460,9 +507,12 @@ var queryparserjs = (function(){
        }
     };
     
-    
+    ////////////////////////////////////////////////////////////////////////////
+    // lexer
+    ////////////////////////////////////////////////////////////////////////////
+
     // this handles some speical tokens for ToQueryToken()
-    var ToQueryToken2 = function(token){
+    var _toQueryToken = function(token){
         var queryToken = new Token();
         queryToken.Value = token;
     
@@ -522,7 +572,7 @@ var queryparserjs = (function(){
                 break;
     
             default:
-                queryToken = ToQueryToken2(token);
+                queryToken = _toQueryToken(token);
                 break;
         };
     
@@ -591,6 +641,10 @@ var queryparserjs = (function(){
         return tokens;
     };
 
+    ////////////////////////////////////////////////////////////////////////////
+    // engine
+    ////////////////////////////////////////////////////////////////////////////
+
     var QueryParser = function(input, onAllFinish){
         console.log("==== queryparserjs start =====");
         var tokens = GetListOfTokens(input);
@@ -644,7 +698,7 @@ var input = "from 'https://careers.mercyascot.co.nz/home'\n" +
             "from ret.html\n" +
             "select 'span[class=detail-item]' as [location, expertise, worktype, level, posteddate, closedate]\n" +
             "where-each as detail\n" +
-            "add-field detail.html for-key detail.$Name;";
+            "add-field detail.html.Split('</span>').LastItem() for-key detail.$Name;";
 
 queryparserjs.Interpret(input, function(rets){
     console.log('all results')
