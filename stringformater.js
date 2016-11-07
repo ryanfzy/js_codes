@@ -1,11 +1,5 @@
 var stringformatterjs = (function(){
 
-    var _forEachCh = function(str, fn){
-        for (var i = 0; i < str.length; i++){
-            fn(str[i]);
-        }
-    }
-
     var _getParam = function(parExp, scope){
         // if parExp is a string, return it
         var regStr = /('|").*?\1/;
@@ -24,7 +18,8 @@ var stringformatterjs = (function(){
     // return a list
     //   first tiem is a key in scope
     //   remainding items are filter expressions
-    var _getParts = function(exp){
+    var _getParts = function(key){
+        var exp = key.substring(2, key.length-1);
         var parts = exp.split('|');
 
         for (var p = 0; p < parts.length; p++){
@@ -53,26 +48,38 @@ var stringformatterjs = (function(){
 
         return ret;
     }
+
+    var _getAllKeys = function(str){
+        var regKey = /%\{[^{}]+?\}/g;
+        return str.match(regKey);
+    }
+
+    var _getAllNakedKeys = function(str){
+        var keys = _getAllKeys(str);
+        for (var i = 0; i < keys.length; i++){
+            keys[i] = keys[i].substring(2, keys[i].length - 1);
+        }
+        return keys;
+    }
     
     // str is the replacing string
     // scope is an object that contains the values of the keys in the replacing string
-    // therefore, for some <key> in <str>, <scope>[<key>] has the <replacing-value>
+    //      for some <key> in <str>, <scope>[<key>] has the <replacing-value>
+    // filter is an object that contains user defined filter functions
+    //      for <key> | <filter1> | <...>, <filter>[<filter1>] is a function, receving at least
+    //      one parameter that is the result from the last filter
     var formater = function(str, scope, filter){
+        var keys = _getAllKeys(str);
 
         // identify for the replacing strings, e.g. %{somekey}
-        var regKey = /%\{[^{}]+?\}/g;
-        var matches = str.match(regKey);
-        
-        for (var i = 0; i < matches.length; i++){
-            var match = matches[i];
-            var exp = match.substring(2, match.length-1);
-
-            var parts = _getParts(exp);
+        for (var i = 0; i < keys.length; i++){
+            var unevaluatedKey = keys[i];
+            var parts = _getParts(unevaluatedKey);
             var key = parts[0];
 
             // if scope has the value for the key, replace the key
             // otherwise, keep as it is
-            var replace = match;
+            var replace = unevaluatedKey;
             if (key in scope){
                 replace = scope[key];
 
@@ -88,13 +95,54 @@ var stringformatterjs = (function(){
                 }
             }
 
-            str = str.replace(match, replace);
+            str = str.replace(unevaluatedKey, replace);
         }
 
         return str;
     }
 
+    var Formater = function(str, subFn){
+        this.orig = str;
+        this.substituteFn = subFn;
+        this.replaceParts = {};
+    }
+
+    Formater.prototype = {
+        Build : function(){
+            var replacingStr = '';
+            if (this.substituteFn != null){
+                for (var part in this.replaceParts){
+                    var partVal = this.replaceParts[part];
+                    replacingStr += this.substituteFn(part, partVal);
+                }
+            }
+            return this.orig.replace(_getAllKeys(this.orig)[0], replacingStr);
+        }
+    }
+
+    var _createReplaceMethod = function(_this, key){
+        return function(val){
+            _this.replaceParts[key] = val;
+            return _this;
+        }
+    }
+
+    var createFormater = function(str, subFn){
+        var formater = new Formater(str, subFn);
+        var keys = _getAllNakedKeys(str);
+        for (var i = 0; i < keys.length; i++){
+            var parts = keys[i].split(',');
+            for (var j = 0; j < parts.length; j++){
+                var part = parts[j].trim();
+                formater[part] = _createReplaceMethod(formater, part);
+                formater.replaceParts[part] = '';
+            }
+        }
+        return formater;
+    }
+
     return {
-        format : formater
+        format : formater,
+        CreateFormater : createFormater
     }
 })();
