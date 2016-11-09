@@ -56,12 +56,26 @@ var stringformatterjs = (function(){
         return str.match(regKey);
     }
 
-    var _getAllNakedKeys = function(str){
-        var keys = _getAllKeys(str);
+    var _getNakedKeys = function(str){
+        var keys = str.substring(2, str.length - 1).split(',');
         for (var i = 0; i < keys.length; i++){
-            keys[i] = keys[i].substring(2, keys[i].length - 1);
+            keys[i] = keys[i].trim();
         }
         return keys;
+    }
+
+    var _getAllNakedKeySet = function(str){
+        var keys = _getAllKeys(str);
+        var keySet = [];
+        for (var i = 0; i < keys.length; i++){
+            var nakedKeys = _getNakedKeys(keys[i]);
+            for (var j = 0; j < nakedKeys.length; j++){
+                if (keySet.indexOf(nakedKeys[j]) < 0){
+                    keySet.push(nakedKeys[j]);
+                }
+            }
+        }
+        return keySet;
     }
     
     // str is the replacing string
@@ -112,14 +126,22 @@ var stringformatterjs = (function(){
 
     Formater.prototype = {
         CreateString : function(){
-            var replacingStr = '';
+            var resultStr = this.orig;
             if (this.substituteFn != null){
-                for (var part in this.replaceParts){
-                    var partVal = this.replaceParts[part];
-                    replacingStr += this.substituteFn(part, partVal);
+                var keys = _getAllKeys(this.orig);
+                for (var i = 0; i < keys.length; i++){
+                    var replacingStr = '';
+                    var nakedKeys = _getNakedKeys(keys[i]);
+                    for (var j = 0; j < nakedKeys.length; j++){
+                        var nakedKey = nakedKeys[j];
+                        if (nakedKey in this.replaceParts){
+                            replacingStr += this.substituteFn(nakedKey, this.replaceParts[nakedKey]);
+                        }
+                    }
+                    resultStr = replacingStr.length > 0 ? resultStr.replace(keys[i], replacingStr) : keys[i];
                 }
             }
-            return this.orig.replace(_getAllKeys(this.orig)[0], replacingStr);
+            return resultStr;
         }
     }
 
@@ -132,7 +154,7 @@ var stringformatterjs = (function(){
 
     var createFormater = function(str, subFn){
         var formater = new Formater(str, subFn);
-        var keys = _getAllNakedKeys(str);
+        var keys = _getAllNakedKeySet(str);
         for (var i = 0; i < keys.length; i++){
             var parts = keys[i].split(',');
             for (var j = 0; j < parts.length; j++){
