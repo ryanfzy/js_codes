@@ -1,5 +1,6 @@
 var stringformatterjs = (function(){
 
+    /* these code supports filter
     var _getParam = function(parExp, scope){
         // if parExp is a string, return it
         var regStr = /('|").*?\1/;
@@ -48,6 +49,7 @@ var stringformatterjs = (function(){
 
         return ret;
     }
+    */
 
     var _getAllKeys = function(str){
         var regKey = /%\{[^{}]+?\}/g;
@@ -65,17 +67,16 @@ var stringformatterjs = (function(){
     // str is the replacing string
     // scope is an object that contains the values of the keys in the replacing string
     //      for some <key> in <str>, <scope>[<key>] has the <replacing-value>
-    // filter is an object that contains user defined filter functions
-    //      for <key> | <filter1> | <...>, <filter>[<filter1>] is a function, receving at least
-    //      one parameter that is the result from the last filter
-    var formater = function(str, scope, filter){
+    //var formater = function(str, scope, filter){
+    var formater = function(str, scope){
         var keys = _getAllKeys(str);
 
         // identify for the replacing strings, e.g. %{somekey}
         for (var i = 0; i < keys.length; i++){
             var unevaluatedKey = keys[i];
-            var parts = _getParts(unevaluatedKey);
-            var key = parts[0];
+            //var parts = _getParts(unevaluatedKey);
+            //var key = parts[0];
+            var key = unevaluatedKey.substring(2, unevaluatedKey.length - 1);
 
             // if scope has the value for the key, replace the key
             // otherwise, keep as it is
@@ -83,6 +84,7 @@ var stringformatterjs = (function(){
             if (key in scope){
                 replace = scope[key];
 
+                /* filter is pointless
                 // if user providers a filter, filter the replace string
                 if (filter && parts.length > 1){
                     var fNames = parts.slice(1)
@@ -93,6 +95,7 @@ var stringformatterjs = (function(){
                         replace = filter[fName].apply(null, [replace, fNameParams.slice(1)]);
                     }
                 }
+                */
             }
 
             str = str.replace(unevaluatedKey, replace);
@@ -108,7 +111,7 @@ var stringformatterjs = (function(){
     }
 
     Formater.prototype = {
-        Build : function(){
+        CreateString : function(){
             var replacingStr = '';
             if (this.substituteFn != null){
                 for (var part in this.replaceParts){
