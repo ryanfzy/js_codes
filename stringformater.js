@@ -135,7 +135,14 @@ var stringformatterjs = (function(){
                     for (var j = 0; j < nakedKeys.length; j++){
                         var nakedKey = nakedKeys[j];
                         if (nakedKey in this.replaceParts){
-                            replacingStr += this.substituteFn(nakedKey, this.replaceParts[nakedKey]);
+                            var resultObj = {
+                                resultStr : '',
+                                index : j,
+                                length : nakedKeys.length
+                            };
+                            if (this.substituteFn(nakedKey, this.replaceParts[nakedKey], resultObj)){
+                                replacingStr += resultObj.resultStr;
+                            }
                         }
                     }
                     resultStr = replacingStr.length > 0 ? resultStr.replace(keys[i], replacingStr) : keys[i];
